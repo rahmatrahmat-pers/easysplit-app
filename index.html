@@ -308,10 +308,12 @@ const HEADER_KW = /\b(date|tanggal|tgl|waktu|jam|receipt|struk|no\.?:|nota|cashi
 const SUMMARY_START = /(sub\s*total|sub-total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item|^[\W_]*jumlah\b|grand\s*total|total\s*bayar|total\s*belanja|\btotal\b|before\s*round|after\s*round|rounding|pembulatan|\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|service\s*charge|service|svc|servis|layanan|gratuit|disc|diskon|potongan|promo|voucher)/i;
 const PAYMENT_KW = /\b(qris|cash|tunai|debit|kredit|credit|kartu|card|visa|master|bca|bni|bri|mandiri|cimb|permata|danamon|gopay|go-pay|ovo|dana|linkaja|shopee\s*pay|shopeepay|flazz|brizzi|tapcash|e-?money|kembali|kembalian|bayar|payment|tendered|tunai)\b/i;
 const VENUE_KW = /\b(restaurant|resto|cafe|caf[eé]|coffee|kopi|kedai|warung|warteg|rumah\s*makan|depot|bakso|mie|mi\s|ayam|sate|seafood|steak|bakery|toko|mart|market|minimarket|supermarket|food\s*court|foodcourt|eatery|kitchen|bistro|grill|catering)\b/i;
+// header noise that exposes a trailing number: receipt #, dates, times
+const HEAD_NOISE = /^\s*#|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\b\d{1,2}:\d{2}\b/;
 
 function cleanName(s){
   return (s||"")
-    .replace(/[•·§¥|»«*_=~^`"\\]+/g," ")
+    .replace(/[•·§¥|»«*_=~^`"\\%❋✻°#@]+/g," ")
     .replace(/\.{2,}/g," ")
     .replace(/^[\s.\-:;,]+/,"")
     .replace(/[\s.\-:;,]+$/,"")
@@ -319,9 +321,9 @@ function cleanName(s){
     .trim();
 }
 function trailingPrice(line){
-  // price must sit at line start or be preceded by a space or '*' — never glued to a letter
-  // (so "SN4444", "070RC.../00206", "19:44:57" are NOT read as prices)
-  const m = line.match(/(?:^|[\s*])(-?\d[\d.,]*)\s*$/);
+  // a price sits at line start or after a non-alphanumeric char (space, * % § » ✻ etc.)
+  // but is NEVER glued to letters/digits — so "SN4444", "070RC.../00206" aren't read as prices
+  const m = line.match(/(?:^|[^A-Za-z0-9])(-?\d[\d.,]*)\s*$/);
   if(!m) return null;
   const value = parseMoney(m[1]);
   if(value==null) return null;
@@ -375,7 +377,7 @@ function parseReceipt(text, L){
   for(const line of lines){
     const p = trailingPrice(line);
     if(phase!=="summary" && SUMMARY_START.test(line)) phase="summary";
-    if(phase==="head"){ if(HEADER_KW.test(line) || !p || p.value<=0) continue; phase="items"; }
+    if(phase==="head"){ if(HEADER_KW.test(line) || HEAD_NOISE.test(line) || !p || p.value<=0) continue; phase="items"; }
     if(phase==="items"){ itemLines.push(line); continue; }
     summaryLines.push(line);
   }
