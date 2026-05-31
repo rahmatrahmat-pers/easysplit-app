@@ -191,6 +191,7 @@ const STR = {
     "editor.chargesTitle":"Tax · Service · Fees","editor.addTax":"+ tax","editor.addService":"+ service","editor.addFee":"+ fee","editor.addDiscount":"+ discount",
     "editor.chargesHelp":"Charges are spread across people in proportion to what they ordered.",
     "editor.subtotal":"Items subtotal","editor.chargesNet":"Tax · service · fees","editor.total":"Bill total",
+    "editor.diff":"Difference vs receipt","editor.scanned":"Scanned receipt total",
     "editor.totalHint":"Edit the total to match the receipt — any difference becomes a rounding line.",
     "editor.breakdown":"Per-person breakdown for this bill",
     "editor.warnUnassigned":"⚠ Some priced items aren’t assigned to anyone yet — they won’t be charged to anybody. Tap names under each item.",
@@ -243,6 +244,7 @@ const STR = {
     "editor.chargesTitle":"Pajak · Layanan · Biaya","editor.addTax":"+ pajak","editor.addService":"+ layanan","editor.addFee":"+ biaya","editor.addDiscount":"+ diskon",
     "editor.chargesHelp":"Biaya dibagi ke setiap orang sesuai porsi pesanannya.",
     "editor.subtotal":"Subtotal item","editor.chargesNet":"Pajak · layanan · biaya","editor.total":"Total tagihan",
+    "editor.diff":"Selisih dari struk","editor.scanned":"Total struk hasil pindai",
     "editor.totalHint":"Ubah total agar pas dengan struk — selisihnya jadi baris pembulatan.",
     "editor.breakdown":"Rincian per orang untuk tagihan ini",
     "editor.warnUnassigned":"⚠ Beberapa item yang ada harganya belum ditandai ke siapa pun — jadi tidak akan ditagih. Ketuk nama di bawah tiap item.",
@@ -370,7 +372,7 @@ function parseReceipt(text, L){
   L = L || {};
   const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   const charges=[];
-  const meta={ total:null };
+  const meta={ total:null, grand:null };
 
   // ---- Pass 1: split lines into header / item-region / summary ----
   let phase="head"; const itemLines=[], summaryLines=[];
@@ -410,9 +412,11 @@ function parseReceipt(text, L){
     const p = trailingPrice(line); if(!p) continue;
     const v=p.value, lab=cleanName(line.slice(0,p.index)).slice(0,24);
     if(/before\s*round/i.test(line)) continue;
+    // the receipt's grand total — capture "bayar/amount due" and plain "total" (largest wins)
+    if(/grand\s*total|total\s*bayar|total\s*tagihan|amount\s*due|\bbayar\b/i.test(line)){ meta.grand=Math.max(meta.grand||0, v); continue; }
     if(/sub\s*total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item/i.test(line)) continue;
     if(/round|pembulatan/i.test(line)) continue;
-    if(/grand\s*total|total\s*bayar|total\s*belanja|\btotal\b/i.test(line)){ meta.total=v; continue; }
+    if(/\btotal\b/i.test(line)){ meta.total=v; meta.grand=Math.max(meta.grand||0, v); continue; }
     if(PAYMENT_KW.test(line)) continue;
     if(/\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|\btax\b/i.test(line)){ charges.push({ id:uid(), label:lab||L.tax||"Tax", kind:"tax", mode:"amount", value:v }); continue; }
     if(/service|svc|servis|layanan|gratuit/i.test(line)){ charges.push({ id:uid(), label:lab||L.service||"Service", kind:"service", mode:"amount", value:v }); continue; }
@@ -428,7 +432,7 @@ function parseReceipt(text, L){
     if(Math.abs(diff)>=0.5 && Math.abs(diff)<=tol)
       charges.push({ id:uid(), label:L.rounding||"Rounding", kind:"other", mode:"amount", value:diff });
   }
-  return { name: detectMerchant(lines), items, charges };
+  return { name: detectMerchant(lines), items, charges, scannedTotal: meta.grand!=null?round2(meta.grand):null };
 }
 
 /* ============================ SPLIT MATH ============================ */
@@ -736,7 +740,8 @@ function Bills({trip,update,cur,showToast}){
   function addBill(seed){
     const bill={ id:uid(), name: (seed&&seed.name) || t("bill.place",{n:trip.bills.length+1}),
       paidBy: trip.people[0]?.id || null, splitMode:"item",
-      items:(seed&&seed.items)||[], charges:(seed&&seed.charges)||[], participants: trip.people.map(p=>p.id) };
+      items:(seed&&seed.items)||[], charges:(seed&&seed.charges)||[], participants: trip.people.map(p=>p.id),
+      scannedTotal: (seed&&seed.scannedTotal)||null };
     update(t=>{ t.bills=[...t.bills,bill]; });
     setEditing(bill.id);
   }
@@ -917,13 +922,33 @@ function BillEditor({bill,trip,update,cur,close,remove}){
 
         <hr className="dashed"/>
         <div className="between tiny"><span className="muted">{t("editor.subtotal")}</span><span className="mono">{fmt(itemsTotal,cur)}</span></div>
-        <div className="between tiny"><span className="muted">{t("editor.chargesNet")}</span><span className="mono">{chargeNet<0?"−":""}{fmt(Math.abs(chargeNet),cur)}</span></div>
+        {(bill.charges||[]).map(c=>{
+          const v=Number(c.value)||0; const amt=c.mode==="percent"?itemsTotal*v/100:v;
+          const reduces = c.kind==="discount" || amt<0;
+          return (
+            <div key={c.id} className="between tiny">
+              <span className="muted">{c.label||t("kind."+c.kind)}{c.mode==="percent"?" ("+v+"%)":""}</span>
+              <span className="mono">{reduces?"−":""}{fmt(Math.abs(amt),cur)}</span>
+            </div>
+          );
+        })}
+        {bill.scannedTotal!=null && Math.abs(round2(grand-bill.scannedTotal))>=0.5 && (
+          <div className="between tiny" style={{marginTop:2}}>
+            <span className="muted">{t("editor.diff")}</span>
+            <span className="mono" style={{fontWeight:700,color:(grand-bill.scannedTotal)<0?"var(--owe)":"var(--accent-deep)"}}>
+              {(grand-bill.scannedTotal)<0?"−":"+"}{fmt(Math.abs(round2(grand-bill.scannedTotal)),cur)}
+            </span>
+          </div>
+        )}
         <div className="between" style={{marginTop:6,alignItems:"center"}}>
           <strong>{t("editor.total")}</strong>
           <input className="inp mono" style={{width:150,textAlign:"right",fontWeight:700,padding:"7px 9px"}} type="number" step="any"
             key={"tot"+round2(grand)} defaultValue={round2(grand)}
             onKeyDown={e=>{ if(e.key==="Enter") e.currentTarget.blur(); }} onBlur={e=>setTotal(e.target.value)}/>
         </div>
+        {bill.scannedTotal!=null && (
+          <div className="between tiny" style={{marginTop:4}}><span className="muted">{t("editor.scanned")}</span><span className="mono">{fmt(bill.scannedTotal,cur)}</span></div>
+        )}
         <p className="tiny muted" style={{marginTop:4}}>{t("editor.totalHint")}</p>
 
         <details style={{marginTop:12}}>
@@ -1010,8 +1035,8 @@ function ScanButton({onParsed,showToast}){
       const prepped = await preprocessImage(file);
       const data = await runOCR(prepped, m=>{ if(m.status==="recognizing text") setProg(Math.round(m.progress*100)); });
       const parsed = parseReceipt(data.text||"", L);
-      if(parsed.items.length===0 && parsed.charges.length===0){ showToast(t("scan.noItems")); onParsed({ name:parsed.name||t("bill.scanned"), items:[], charges:[] }); }
-      else { showToast(t("scan.ok",{n:parsed.items.length})); onParsed({ name:parsed.name||t("bill.scanned"), items:parsed.items, charges:parsed.charges }); }
+      if(parsed.items.length===0 && parsed.charges.length===0){ showToast(t("scan.noItems")); onParsed({ name:parsed.name||t("bill.scanned"), items:[], charges:[], scannedTotal:parsed.scannedTotal }); }
+      else { showToast(t("scan.ok",{n:parsed.items.length})); onParsed({ name:parsed.name||t("bill.scanned"), items:parsed.items, charges:parsed.charges, scannedTotal:parsed.scannedTotal }); }
     }catch(e){
       console.error(e);
       const blocked=/worker|securityerror|blob|origin/i.test(e.message||"");
