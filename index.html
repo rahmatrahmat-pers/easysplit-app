@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -112,8 +112,12 @@
   .pill.disc{background:var(--owe-soft);}
   .pill.fee{background:var(--paper-3);}
 
-  .item-line{display:grid;grid-template-columns:1fr 60px 112px 36px;gap:8px;align-items:center;padding:8px 0;border-bottom:1.5px dashed rgba(27,24,19,.22);}
+  .item-line{display:grid;grid-template-columns:1fr 60px 112px 36px;gap:8px;align-items:center;}
   @media(max-width:620px){.item-line{grid-template-columns:1fr 48px 92px 32px;}}
+  .item-card{border:2px solid var(--ink);border-radius:11px;padding:9px 10px;margin-bottom:10px;background:var(--paper);box-shadow:2px 2px 0 rgba(27,24,19,.55);}
+  .item-card .assign-row{margin-top:8px;padding-top:8px;border-top:1.5px dashed rgba(27,24,19,.28);}
+  .item-head{display:grid;grid-template-columns:1fr 60px 112px 36px;gap:8px;align-items:center;font-weight:700;}
+  @media(max-width:620px){.item-head{grid-template-columns:1fr 48px 92px 32px;}}
   .assign-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
   .assign-chip{font-size:.78rem;font-weight:600;border:2px solid var(--ink);border-radius:20px;padding:3px 9px;background:var(--paper-2);opacity:.5;}
   .assign-chip.on{opacity:1;color:#fff;}
@@ -195,6 +199,8 @@ const STR = {
     "label.tax":"Tax","label.service":"Service","label.fee":"Fee","label.discount":"Discount","label.rounding":"Rounding",
     "settle.title":"Settle up","settle.meta":"Total {total} across {n} bill(s) · netted into {tx} transfer(s)",
     "settle.copy":"Copy summary","settle.copied":"Summary copied ✓","settle.who":"Who pays whom",
+    "settle.detail":"Per-person expenses","settle.fairNote":"Tax, service & fees are split in proportion to what each person ordered.",
+    "settle.dItems":"Items","settle.dShare":"Total share","settle.dPaid":"Paid","settle.dNet":"Net",
     "settle.markPaid":"Mark paid","settle.paid":"✓ Paid","settle.payTo":"Pay to:",
     "settle.noPay":"💡 {name} hasn’t added payment details (do it in the People tab).",
     "settle.square":"Everyone’s square — no transfers needed.","settle.needData":"Add people and bills to see the settle-up plan.",
@@ -245,6 +251,8 @@ const STR = {
     "label.tax":"Pajak","label.service":"Layanan","label.fee":"Biaya","label.discount":"Diskon","label.rounding":"Pembulatan",
     "settle.title":"Pelunasan","settle.meta":"Total {total} dari {n} tagihan · digabung jadi {tx} transfer",
     "settle.copy":"Salin ringkasan","settle.copied":"Ringkasan tersalin ✓","settle.who":"Siapa bayar siapa",
+    "settle.detail":"Rincian pengeluaran per orang","settle.fairNote":"Pajak, layanan & biaya dibagi sesuai porsi pesanan tiap orang.",
+    "settle.dItems":"Item","settle.dShare":"Total bagian","settle.dPaid":"Dibayar","settle.dNet":"Selisih",
     "settle.markPaid":"Tandai lunas","settle.paid":"✓ Lunas","settle.payTo":"Bayar ke:",
     "settle.noPay":"💡 {name} belum menambahkan detail pembayaran (isi di tab Orang).",
     "settle.square":"Semua impas — tidak perlu transfer.","settle.needData":"Tambahkan orang dan tagihan untuk melihat rencana pelunasan.",
@@ -420,6 +428,33 @@ function computeBalances(trip){
   });
   Object.keys(bal).forEach(k=>bal[k]=round2(bal[k])); return bal;
 }
+// Per-person expense breakdown across all bills. Tax/service/fees/discount are
+// allocated to each person in proportion to the value of the items they ordered.
+function personBreakdown(trip){
+  const ids=trip.people.map(p=>p.id);
+  const out={}; ids.forEach(id=>out[id]={paid:0,items:0,tax:0,service:0,other:0,discount:0,total:0});
+  (trip.bills||[]).forEach(bill=>{
+    const sub={}; ids.forEach(id=>sub[id]=0); let itemsTotal=0;
+    if(bill.splitMode==="equal"){
+      const parts=(bill.participants&&bill.participants.length?bill.participants:ids).filter(id=>ids.includes(id));
+      bill.items.forEach(it=>itemsTotal+=(Number(it.price)||0)*(Number(it.qty)||1));
+      const per=parts.length?itemsTotal/parts.length:0; parts.forEach(id=>sub[id]+=per);
+    } else {
+      bill.items.forEach(it=>{ const line=(Number(it.price)||0)*(Number(it.qty)||1); itemsTotal+=line;
+        const a=(it.assignedTo||[]).filter(id=>ids.includes(id)); if(!a.length) return; const per=line/a.length; a.forEach(id=>sub[id]+=per); });
+    }
+    ids.forEach(id=>out[id].items+=sub[id]);
+    (bill.charges||[]).forEach(c=>{
+      const v=Number(c.value)||0; const amt=c.mode==="percent"?itemsTotal*v/100:v;
+      const cat=c.kind==="tax"?"tax":c.kind==="service"?"service":c.kind==="discount"?"discount":"other";
+      ids.forEach(id=>{ const prop=itemsTotal>0?sub[id]/itemsTotal:0; out[id][cat]+=prop*(cat==="discount"?Math.abs(amt):amt); });
+    });
+    if(bill.paidBy && out[bill.paidBy]) out[bill.paidBy].paid += billShares(bill,trip.people).grand;
+  });
+  ids.forEach(id=>{ const o=out[id]; o.total=round2(o.items+o.tax+o.service+o.other-o.discount);
+    ["paid","items","tax","service","other","discount"].forEach(k=>o[k]=round2(o[k])); });
+  return out;
+}
 function settle(bal){
   const cred=[],deb=[];
   Object.entries(bal).forEach(([id,amt])=>{ if(amt>0.009) cred.push({id,amt}); else if(amt<-0.009) deb.push({id,amt:-amt}); });
@@ -446,7 +481,7 @@ const go = path => { window.location.hash = path; };
 function App(){
   const route = useHashRoute();
   const [toast,setToast]=useState(null);
-  const [lang,setLangState]=useState(()=>storeGet("easysplit:lang")||"id");
+  const [lang,setLangState]=useState(()=>storeGet("easysplit:lang")||"en");
   const setLang = l => { setLangState(l); storeSet("easysplit:lang",l); document.documentElement.lang=l; };
   const t = useCallback((k,p)=>{ let s=(STR[lang]&&STR[lang][k])||STR.en[k]||k; if(p) Object.keys(p).forEach(x=>{ s=s.split("{"+x+"}").join(p[x]); }); return s; },[lang]);
   const showToast = useCallback(msg=>{ setToast(msg); setTimeout(()=>setToast(null),1900); },[]);
@@ -785,12 +820,12 @@ function BillEditor({bill,trip,update,cur,close,remove}){
 
         <hr className="dashed"/>
         <div className="between"><strong className="disp">{t("editor.items")}</strong><button className="btn sm" onClick={addItem}>{t("editor.addItem")}</button></div>
-        <div className="item-line tiny muted" style={{borderBottom:"2px solid var(--ink)",fontWeight:700}}>
-          <span>{t("editor.colName")}</span><span>{t("editor.colQty")}</span><span style={{textAlign:"right"}}>{t("editor.colPrice")}</span><span></span>
+        <div className="item-head tiny muted" style={{padding:"0 10px 6px"}}>
+          <span>{t("editor.colName")}</span><span style={{textAlign:"center"}}>{t("editor.colQty")}</span><span style={{textAlign:"right"}}>{t("editor.colPrice")}</span><span></span>
         </div>
         {bill.items.length===0 && <p className="tiny muted" style={{padding:"10px 0"}}>{t("editor.noItems")}</p>}
         {bill.items.map(it=>(
-          <div key={it.id}>
+          <div key={it.id} className="item-card">
             <div className="item-line">
               <input className="inp" style={{padding:"6px 9px"}} placeholder={t("editor.itemPh")} value={it.name}
                 onChange={e=>setBill(b=>b.items=b.items.map(x=>x.id===it.id?{...x,name:e.target.value}:x))}/>
@@ -803,7 +838,7 @@ function BillEditor({bill,trip,update,cur,close,remove}){
               </button>
             </div>
             {bill.splitMode==="item" && (
-              <div className="assign-row" style={{marginBottom:6}}>
+              <div className="assign-row">
                 <span className="tiny muted" style={{alignSelf:"center"}}>{t("editor.sharedBy")}</span>
                 {trip.people.map(p=>{ const on=(it.assignedTo||[]).includes(p.id);
                   return <button key={p.id} className={"assign-chip"+(on?" on":"")} style={on?{background:colorFor(trip.people,p.id),borderColor:"var(--ink)"}:{}}
@@ -921,6 +956,7 @@ function ScanButton({onParsed,showToast}){
 function Settle({trip,update,cur,balances,showToast}){
   const {t}=useI18n();
   const tx = useMemo(()=>settle(balances),[balances]);
+  const detail = useMemo(()=>personBreakdown(trip),[trip]);
   const conf = trip.confirmations||{};
   const nameOf = id => trip.people.find(p=>p.id===id)?.name || "?";
   const payOf = id => trip.people.find(p=>p.id===id)?.pay || "";
@@ -951,6 +987,48 @@ function Settle({trip,update,cur,balances,showToast}){
               <span className="row" style={{gap:7,width:130,minWidth:130}}><span className="avatar" style={{width:22,height:22,fontSize:".66rem",background:colorFor(trip.people,p.id)}}>{initials(p.name)}</span><span className="tiny" style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span></span>
               <div className="balance-bar" style={{flex:1}}><div style={{height:"100%",width:(Math.abs(b)/max*100)+"%",background:pos?"var(--accent)":"var(--owe)",borderRadius:20}}/></div>
               <span className="mono tiny" style={{width:96,textAlign:"right",fontWeight:700,color:pos?"var(--accent-deep)":"var(--owe)"}}>{pos?"+":"−"}{fmt(Math.abs(b),cur)}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <hr className="dashed"/>
+      <strong className="disp">{t("settle.detail")}</strong>
+      <p className="tiny muted" style={{marginTop:2}}>{t("settle.fairNote")}</p>
+      <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:10}}>
+        {trip.people.map(p=>{
+          const d=detail[p.id]||{}; const net=round2((d.paid||0)-(d.total||0));
+          const rows=[
+            [t("settle.dItems"), d.items, false],
+            [t("label.tax"), d.tax, false],
+            [t("label.service"), d.service, false],
+            [t("label.fee"), d.other, false],
+            [t("label.discount"), d.discount, true],
+          ].filter(r=>Math.abs(r[1]||0)>=0.005);
+          return (
+            <div key={p.id} className="settle-card">
+              <div className="between">
+                <span className="row" style={{gap:8}}><span className="avatar" style={{width:24,height:24,fontSize:".7rem",background:colorFor(trip.people,p.id)}}>{initials(p.name)}</span><strong>{p.name}</strong></span>
+                <span className="mono" style={{fontWeight:700}}>{fmt(d.total||0,cur)}</span>
+              </div>
+              <div style={{marginTop:8}}>
+                {rows.map((r,k)=>(
+                  <div key={k} className="between tiny" style={{padding:"2px 0"}}>
+                    <span className="muted">{r[0]}</span>
+                    <span className="mono">{r[2]?"−":""}{fmt(Math.abs(r[1]),cur)}</span>
+                  </div>
+                ))}
+                <div className="between tiny" style={{padding:"4px 0 0",marginTop:4,borderTop:"1.5px dashed rgba(27,24,19,.3)"}}>
+                  <span className="muted">{t("settle.dShare")}</span><span className="mono" style={{fontWeight:700}}>{fmt(d.total||0,cur)}</span>
+                </div>
+                <div className="between tiny" style={{padding:"2px 0"}}>
+                  <span className="muted">{t("settle.dPaid")}</span><span className="mono">{fmt(d.paid||0,cur)}</span>
+                </div>
+                <div className="between tiny" style={{padding:"2px 0"}}>
+                  <span className="muted">{t("settle.dNet")}</span>
+                  <span className="mono" style={{fontWeight:700,color:net>0.009?"var(--accent-deep)":net<-0.009?"var(--owe)":"var(--ink-soft)"}}>{net>0.009?"+":net<-0.009?"−":""}{fmt(Math.abs(net),cur)}</span>
+                </div>
+              </div>
             </div>
           );
         })}
