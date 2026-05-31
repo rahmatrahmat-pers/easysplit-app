@@ -367,41 +367,49 @@ function detectMerchant(lines){
 function parseReceipt(text, L){
   L = L || {};
   const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
-  const items=[], charges=[];
-  let phase="head", lastItem=null;
+  const charges=[];
   const meta={ total:null };
 
+  // ---- Pass 1: split lines into header / item-region / summary ----
+  let phase="head"; const itemLines=[], summaryLines=[];
   for(const line of lines){
     const p = trailingPrice(line);
     if(phase!=="summary" && SUMMARY_START.test(line)) phase="summary";
+    if(phase==="head"){ if(HEADER_KW.test(line) || !p || p.value<=0) continue; phase="items"; }
+    if(phase==="items"){ itemLines.push(line); continue; }
+    summaryLines.push(line);
+  }
 
-    if(phase==="head"){
-      if(HEADER_KW.test(line) || !p || p.value<=0) continue;
-      phase="items";
+  // ---- Detect layout: are item names ON the priced line, or on the NEXT line? ----
+  let priced=0, withName=0;
+  itemLines.forEach(l=>{ const pl=parseItemLine(l); if(pl){ priced++; if(pl.hasName) withName++; } });
+  const nameFollows = priced>0 && withName < priced/2;   // layout B (qty x unit \n name)
+
+  // ---- Pass 2: build items ----
+  const items=[]; let lastItem=null;
+  for(const line of itemLines){
+    const pl = parseItemLine(line);
+    if(pl){
+      lastItem={ id:uid(), name:pl.name.slice(0,48), qty:pl.qty, price:pl.unit, assignedTo:[] };
+      lastItem._needsName = !pl.hasName;
+      items.push(lastItem);
+    } else if(lastItem){
+      const extra=cleanName(line);
+      if(!extra) continue;
+      if(lastItem._needsName){ lastItem.name=extra.slice(0,48); lastItem._needsName=false; }
+      else if(!nameFollows && !/\d/.test(extra)){ lastItem.name=(lastItem.name+" "+extra).slice(0,48).trim(); }
+      // layout B: once an item is named, ignore stray text lines (avoids name pile-ups)
     }
+  }
+  items.forEach(it=>{ delete it._needsName; });
 
-    if(phase==="items"){
-      const parsed = parseItemLine(line);
-      if(parsed){
-        lastItem={ id:uid(), name:parsed.name.slice(0,48), qty:parsed.qty, price:parsed.unit, assignedTo:[] };
-        lastItem._needsName = !parsed.hasName;   // layout B: real name is on the next line
-        items.push(lastItem);
-      } else if(lastItem){
-        const extra=cleanName(line);
-        if(extra){
-          if(lastItem._needsName){ lastItem.name=extra.slice(0,48); lastItem._needsName=false; }
-          else if(!/\d/.test(extra)) lastItem.name=(lastItem.name+" "+extra).slice(0,48).trim();
-        }
-      }
-      continue;
-    }
-
-    // summary phase
-    if(!p) continue;
+  // ---- Classify summary lines into charges ----
+  for(const line of summaryLines){
+    const p = trailingPrice(line); if(!p) continue;
     const v=p.value, lab=cleanName(line.slice(0,p.index)).slice(0,24);
     if(/before\s*round/i.test(line)) continue;
     if(/sub\s*total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item/i.test(line)) continue;
-    if(/round|pembulatan/i.test(line)) continue;                 // reconstructed below
+    if(/round|pembulatan/i.test(line)) continue;
     if(/grand\s*total|total\s*bayar|total\s*belanja|\btotal\b/i.test(line)){ meta.total=v; continue; }
     if(PAYMENT_KW.test(line)) continue;
     if(/\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|\btax\b/i.test(line)){ charges.push({ id:uid(), label:lab||L.tax||"Tax", kind:"tax", mode:"amount", value:v }); continue; }
@@ -409,13 +417,12 @@ function parseReceipt(text, L){
     if(/disc|diskon|potongan|promo|voucher/i.test(line)){ charges.push({ id:uid(), label:lab||L.discount||"Discount", kind:"discount", mode:"amount", value:v }); continue; }
   }
 
-  items.forEach(it=>{ delete it._needsName; });
-  // reconstruct rounding from the printed total so the bill reconciles (only for genuinely small gaps)
+  // ---- Reconstruct rounding from printed total (small gaps only) ----
   const itemsSum = items.reduce((s,it)=>s+(Number(it.price)||0)*(Number(it.qty)||1),0);
   const chargeSum = charges.reduce((s,c)=>s+(c.kind==="discount"?-c.value:c.value),0);
   if(meta.total!=null){
     const diff = round2(meta.total - (itemsSum + chargeSum));
-    const tol = Math.max(50, (itemsSum+Math.abs(chargeSum))*0.01);  // rounding is tiny; ignore big gaps
+    const tol = Math.max(50, (itemsSum+Math.abs(chargeSum))*0.01);
     if(Math.abs(diff)>=0.5 && Math.abs(diff)<=tol)
       charges.push({ id:uid(), label:L.rounding||"Rounding", kind:"other", mode:"amount", value:diff });
   }
@@ -866,6 +873,9 @@ function BillEditor({bill,trip,update,cur,close,remove}){
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
               </button>
             </div>
+            <div className="tiny muted" style={{textAlign:"right",marginTop:6}}>
+              {(it.qty||1)} × {fmt(it.price||0,cur)} = <strong className="mono" style={{color:"var(--ink)"}}>{fmt((Number(it.qty)||1)*(Number(it.price)||0),cur)}</strong>
+            </div>
             {bill.splitMode==="item" && (
               <div className="assign-row">
                 <span className="tiny muted" style={{alignSelf:"center"}}>{t("editor.sharedBy")}</span>
@@ -947,6 +957,43 @@ function BillEditor({bill,trip,update,cur,close,remove}){
 }
 
 /* ---------- Scan / OCR ---------- */
+/* ---------- Scan / OCR ---------- */
+function loadImageEl(file){
+  return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=URL.createObjectURL(file); });
+}
+// Upscale + grayscale + contrast-stretch; big accuracy win on thermal receipts.
+async function preprocessImage(file){
+  try{
+    const img=await loadImageEl(file);
+    const scale=Math.min(2.6, Math.max(1, 1700/(img.naturalWidth||img.width||1700)));
+    const w=Math.round((img.naturalWidth||img.width)*scale), h=Math.round((img.naturalHeight||img.height)*scale);
+    const c=document.createElement("canvas"); c.width=w; c.height=h;
+    const ctx=c.getContext("2d"); ctx.drawImage(img,0,0,w,h);
+    const d=ctx.getImageData(0,0,w,h), a=d.data;
+    for(let i=0;i<a.length;i+=4){
+      let g=0.299*a[i]+0.587*a[i+1]+0.114*a[i+2];
+      g=(g-128)*1.45+135;                         // boost contrast
+      g=g<0?0:g>255?255:g;
+      a[i]=a[i+1]=a[i+2]=g;
+    }
+    ctx.putImageData(d,0,0);
+    return c;
+  }catch(e){ return file; }                       // fall back to raw file
+}
+async function runOCR(image, logger){
+  // Worker API lets us set a receipt-friendly page-segmentation mode (single column).
+  if(Tesseract.createWorker){
+    try{
+      const worker=await Tesseract.createWorker("ind+eng",1,{ logger });
+      try{ await worker.setParameters({ tessedit_pageseg_mode:"4", preserve_interword_spaces:"1" }); }catch(e){}
+      const { data }=await worker.recognize(image);
+      await worker.terminate();
+      return data;
+    }catch(e){ /* fall through */ }
+  }
+  const { data }=await Tesseract.recognize(image,"ind+eng",{ logger });
+  return data;
+}
 function ScanButton({onParsed,showToast}){
   const {t}=useI18n();
   const inputRef=useRef();
@@ -958,7 +1005,8 @@ function ScanButton({onParsed,showToast}){
     if(typeof Tesseract==="undefined"){ showToast(t("scan.noEngine")); onParsed({ name:t("bill.new"), items:[], charges:[] }); return; }
     setBusy(true); setProg(0);
     try{
-      const { data } = await Tesseract.recognize(file, "ind+eng", { logger:m=>{ if(m.status==="recognizing text") setProg(Math.round(m.progress*100)); } });
+      const prepped = await preprocessImage(file);
+      const data = await runOCR(prepped, m=>{ if(m.status==="recognizing text") setProg(Math.round(m.progress*100)); });
       const parsed = parseReceipt(data.text||"", L);
       if(parsed.items.length===0 && parsed.charges.length===0){ showToast(t("scan.noItems")); onParsed({ name:parsed.name||t("bill.scanned"), items:[], charges:[] }); }
       else { showToast(t("scan.ok",{n:parsed.items.length})); onParsed({ name:parsed.name||t("bill.scanned"), items:parsed.items, charges:parsed.charges }); }
