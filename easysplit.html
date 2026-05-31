@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EasySplit — Upload. Split. Settle. Done.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F4EEE1;
+    --paper-2:#FCFAF3;
+    --paper-3:#EFE7D6;
+    --ink:#1B1813;
+    --ink-soft:#6E665A;
+    --ink-faint:#A89F8E;
+    --line:#1B1813;
+    --accent:#0E9E6E;
+    --accent-deep:#0a7d57;
+    --accent-soft:#DCF1E7;
+    --owe:#D9492C;
+    --owe-soft:#FBE3DC;
+    --amber:#C98214;
+    --amber-soft:#F6E7C9;
+    --shadow:6px 6px 0 rgba(27,24,19,.9);
+    --shadow-sm:3px 3px 0 rgba(27,24,19,.85);
+    --radius:14px;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --disp:"Bricolage Grotesque","Hanken Grotesk",system-ui,sans-serif;
+    --body:"Hanken Grotesk",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--body);
+    color:var(--ink);
+    background-color:var(--paper);
+    background-image:
+      radial-gradient(circle at 18% 12%, rgba(14,158,110,.10), transparent 42%),
+      radial-gradient(circle at 84% 8%, rgba(201,130,20,.12), transparent 40%),
+      radial-gradient(circle at 50% 120%, rgba(217,73,44,.08), transparent 55%);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.5;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
+  }
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .disp{font-family:var(--disp);}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;font-size:1rem;}
+  a{color:var(--accent-deep);}
+
+  /* layout */
+  .wrap{max-width:980px;margin:0 auto;padding:0 18px 90px;}
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(244,238,225,.86);backdrop-filter:blur(8px);border-bottom:2.5px solid var(--ink);}
+  .topbar-inner{max-width:980px;margin:0 auto;padding:12px 18px;display:flex;align-items:center;gap:12px;}
+  .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);}
+  .brand .logo{width:38px;height:38px;border:2.5px solid var(--ink);border-radius:10px;background:var(--accent);display:grid;place-items:center;box-shadow:var(--shadow-sm);transform:rotate(-3deg);}
+  .brand .logo svg{width:22px;height:22px;}
+  .brand .name{font-family:var(--disp);font-weight:800;font-size:1.35rem;letter-spacing:-.02em;line-height:1;}
+  .brand .tag{font-size:.7rem;color:var(--ink-soft);font-weight:600;letter-spacing:.02em;}
+  .spacer{flex:1;}
+
+  /* buttons */
+  .btn{display:inline-flex;align-items:center;gap:8px;border:2.5px solid var(--ink);background:var(--paper-2);color:var(--ink);
+    padding:10px 16px;border-radius:11px;font-weight:700;font-size:.92rem;box-shadow:var(--shadow-sm);
+    transition:transform .08s ease, box-shadow .08s ease;}
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 rgba(27,24,19,.85);}
+  .btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 rgba(27,24,19,.85);}
+  .btn.primary{background:var(--accent);color:#fff;}
+  .btn.owe{background:var(--owe);color:#fff;}
+  .btn.ghost{box-shadow:none;background:transparent;}
+  .btn.ghost:hover{box-shadow:none;background:rgba(27,24,19,.05);transform:none;}
+  .btn.sm{padding:6px 11px;font-size:.82rem;border-width:2px;border-radius:9px;box-shadow:2px 2px 0 rgba(27,24,19,.8);}
+  .btn.sm:active{transform:translate(2px,2px);box-shadow:0 0 0;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:var(--shadow-sm);}
+  .iconbtn{border:2px solid var(--ink);background:var(--paper-2);width:34px;height:34px;border-radius:9px;display:grid;place-items:center;box-shadow:2px 2px 0 rgba(27,24,19,.8);transition:transform .08s;}
+  .iconbtn:hover{transform:translate(-1px,-1px);}
+  .iconbtn:active{transform:translate(2px,2px);box-shadow:0 0 0;}
+
+  /* inputs */
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);}
+  .inp{border:2.5px solid var(--ink);background:var(--paper-2);border-radius:10px;padding:10px 12px;color:var(--ink);outline:none;}
+  .inp:focus{box-shadow:inset 0 0 0 2px var(--accent-soft);border-color:var(--accent-deep);}
+  .inp.mono{font-family:var(--mono);}
+
+  /* receipt card */
+  .receipt{position:relative;background:var(--paper-2);border:2.5px solid var(--ink);border-radius:6px;box-shadow:var(--shadow);}
+  .receipt::before,.receipt::after{content:"";position:absolute;left:-1px;right:-1px;height:9px;background:
+    radial-gradient(circle at 7px 0, transparent 0 5px, var(--paper-2) 5.5px) 0 0/14px 9px repeat-x;}
+  .receipt::before{top:-9px;transform:scaleY(-1);filter:drop-shadow(0 -2.5px 0 var(--ink));}
+  .receipt::after{bottom:-9px;filter:drop-shadow(0 2.5px 0 var(--ink));}
+  .dashed{border:none;border-top:2px dashed var(--ink);opacity:.4;margin:14px 0;}
+
+  .hero-tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;background:var(--ink);color:var(--paper);padding:5px 12px;border-radius:30px;}
+  h1.hero{font-family:var(--disp);font-weight:800;font-size:clamp(2.4rem,6vw,4.2rem);line-height:.96;letter-spacing:-.03em;margin:18px 0 10px;}
+  .hero .accent{color:var(--accent-deep);position:relative;}
+  .lead{font-size:1.08rem;color:var(--ink-soft);max-width:46ch;}
+
+  .grid-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:26px;}
+  @media(max-width:720px){.grid-steps{grid-template-columns:repeat(2,1fr);}}
+  .step{border:2.5px solid var(--ink);border-radius:12px;padding:14px;background:var(--paper-2);box-shadow:var(--shadow-sm);}
+  .step .n{font-family:var(--mono);font-weight:700;font-size:.75rem;color:var(--accent-deep);}
+  .step h4{font-family:var(--disp);font-weight:700;margin:6px 0 4px;font-size:1.05rem;}
+  .step p{margin:0;font-size:.85rem;color:var(--ink-soft);}
+
+  .tabs{display:flex;gap:6px;border-bottom:2.5px solid var(--ink);margin:20px 0 0;flex-wrap:wrap;}
+  .tab{border:2.5px solid var(--ink);border-bottom:none;background:var(--paper-3);padding:9px 16px;border-radius:11px 11px 0 0;font-weight:700;font-size:.9rem;position:relative;top:2.5px;color:var(--ink-soft);}
+  .tab.active{background:var(--paper-2);color:var(--ink);}
+  .tab .badge{font-family:var(--mono);font-size:.7rem;background:var(--ink);color:var(--paper);border-radius:20px;padding:1px 7px;margin-left:6px;}
+
+  .panel{background:var(--paper-2);border:2.5px solid var(--ink);border-top:none;border-radius:0 0 12px 12px;padding:20px;box-shadow:var(--shadow);}
+
+  .person-chip{display:inline-flex;align-items:center;gap:7px;border:2px solid var(--ink);border-radius:30px;padding:5px 10px 5px 6px;background:var(--paper-2);font-weight:600;font-size:.86rem;}
+  .avatar{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:.72rem;border:2px solid var(--ink);}
+
+  .row{display:flex;align-items:center;gap:10px;}
+  .between{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .muted{color:var(--ink-soft);}
+  .tiny{font-size:.78rem;}
+  .pill{font-family:var(--mono);font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:20px;border:2px solid var(--ink);text-transform:uppercase;letter-spacing:.04em;}
+  .pill.tax{background:var(--amber-soft);}
+  .pill.svc{background:var(--accent-soft);}
+  .pill.disc{background:var(--owe-soft);}
+
+  .item-line{display:grid;grid-template-columns:1fr 64px 110px 36px;gap:8px;align-items:center;padding:8px 0;border-bottom:1.5px dashed rgba(27,24,19,.22);}
+  @media(max-width:620px){.item-line{grid-template-columns:1fr 52px 92px 32px;}}
+  .assign-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .assign-chip{font-size:.78rem;font-weight:600;border:2px solid var(--ink);border-radius:20px;padding:3px 9px;background:var(--paper-2);opacity:.5;}
+  .assign-chip.on{opacity:1;color:#fff;}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(27,24,19,.45);z-index:200;display:grid;place-items:start center;padding:30px 14px;overflow:auto;}
+  .modal{width:100%;max-width:640px;background:var(--paper-2);border:2.5px solid var(--ink);border-radius:14px;box-shadow:var(--shadow);padding:22px;}
+
+  .balance-bar{height:14px;border-radius:20px;border:2px solid var(--ink);overflow:hidden;background:var(--paper-3);}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:11px 18px;border-radius:30px;font-weight:600;z-index:500;box-shadow:var(--shadow-sm);animation:pop .25s ease;}
+  @keyframes pop{from{transform:translate(-50%,12px);opacity:0;}to{transform:translate(-50%,0);opacity:1;}}
+  .empty{text-align:center;padding:34px 14px;color:var(--ink-soft);}
+  .empty .big{font-size:2.6rem;}
+  .settle-card{border:2.5px solid var(--ink);border-radius:12px;padding:14px;background:var(--paper-2);box-shadow:var(--shadow-sm);margin-bottom:12px;}
+  .settle-card.done{opacity:.62;background:var(--accent-soft);}
+  .arrow{font-family:var(--disp);font-weight:800;font-size:1.3rem;}
+  .kbd{font-family:var(--mono);font-size:.8rem;background:var(--paper-3);border:1.5px solid var(--ink);border-radius:6px;padding:1px 6px;}
+  .scan-drop{border:2.5px dashed var(--ink);border-radius:14px;padding:26px;text-align:center;background:var(--paper-3);transition:background .15s;}
+  .scan-drop.drag{background:var(--accent-soft);}
+  .bar{height:10px;background:var(--paper-3);border:2px solid var(--ink);border-radius:20px;overflow:hidden;}
+  .bar > i{display:block;height:100%;background:var(--accent);transition:width .2s;}
+  .note{font-size:.82rem;background:var(--amber-soft);border:2px solid var(--ink);border-radius:10px;padding:9px 12px;}
+  details summary{cursor:pointer;font-weight:700;}
+  .recent{display:flex;flex-direction:column;gap:8px;}
+  .recent a{display:flex;justify-content:space-between;align-items:center;text-decoration:none;color:var(--ink);border:2px solid var(--ink);border-radius:10px;padding:10px 13px;background:var(--paper-2);box-shadow:2px 2px 0 rgba(27,24,19,.8);font-weight:600;}
+  .recent a:hover{transform:translate(-1px,-1px);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+/* ============================ STORAGE ============================ */
+/* Source of truth is in-memory; we mirror to localStorage when available.
+   In a sandboxed preview localStorage may be blocked — the app still works,
+   it just won't persist across reloads there. When you HOST this file,
+   localStorage persists per browser. For true cross-device "anyone with the
+   link" sync you'd point save/load at a tiny backend (see notes in chat). */
+const mem = {};
+const LS = (()=>{ try{ const k="__es_test"; localStorage.setItem(k,"1"); localStorage.removeItem(k); return localStorage; }catch(e){ return null; } })();
+function storeGet(key){
+  if(LS){ try{ const v=LS.getItem(key); return v?JSON.parse(v):null; }catch(e){} }
+  return mem[key]!==undefined?mem[key]:null;
+}
+function storeSet(key,val){
+  mem[key]=val;
+  if(LS){ try{ LS.setItem(key,JSON.stringify(val)); }catch(e){} }
+}
+const TRIP_KEY = id => "easysplit:trip:"+id;
+const INDEX_KEY = "easysplit:index";
+
+function listTrips(){ return storeGet(INDEX_KEY) || []; }
+function touchIndex(trip){
+  let idx = listTrips().filter(t=>t.id!==trip.id);
+  idx.unshift({ id:trip.id, name:trip.name, when:Date.now() });
+  storeSet(INDEX_KEY, idx.slice(0,12));
+}
+function loadTrip(id){ return storeGet(TRIP_KEY(id)); }
+function saveTrip(trip){ storeSet(TRIP_KEY(trip.id), trip); touchIndex(trip); }
+
+/* ============================ HELPERS ============================ */
+const ADJ=["warm","cozy","brisk","sunny","jolly","spicy","mellow","crisp","lucky","fizzy","golden","minty"];
+const ANI=["otter","tapir","koala","gecko","heron","panda","civet","lemur","quokka","manta","ibex","finch"];
+const rnd = a => a[Math.floor(Math.random()*a.length)];
+const uid = () => Math.random().toString(36).slice(2,9);
+function newTripId(){ return rnd(ADJ)+"-"+rnd(ANI)+"-"+Math.random().toString(36).slice(2,5); }
+
+const COLORS=["#0E9E6E","#D9492C","#C98214","#3B7DD8","#9B4DCA","#0FA9A0","#D64B8A","#5E8C2E","#C2592B","#6A6FE0"];
+const colorFor = (people,id)=>{ const i=people.findIndex(p=>p.id===id); return COLORS[(i<0?0:i)%COLORS.length]; };
+const initials = name => (name||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase() || "?";
+
+function fmt(n, cur){
+  n = Number(n)||0;
+  const noDec = ["IDR","JPY","KRW","VND"].includes(cur);
+  try{
+    return new Intl.NumberFormat(undefined,{style:"currency",currency:cur,
+      minimumFractionDigits:noDec?0:2, maximumFractionDigits:noDec?0:2}).format(n);
+  }catch(e){ return (noDec?Math.round(n):n.toFixed(2))+" "+cur; }
+}
+const round2 = n => Math.round((Number(n)+Number.EPSILON)*100)/100;
+
+/* parse a number from messy OCR text */
+function parseMoney(str){
+  if(!str) return null;
+  let s = (""+str).replace(/[^\d.,]/g,"");
+  if(!s) return null;
+  const hasC = s.includes(","), hasD = s.includes(".");
+  if(hasC && hasD){
+    // last separator is decimal
+    const lastC=s.lastIndexOf(","), lastD=s.lastIndexOf(".");
+    const dec = lastC>lastD ? "," : ".";
+    s = s.replace(new RegExp("\\"+(dec===","?".":","),"g"),"").replace(dec,".");
+  } else if(hasC){
+    const grp = s.split(",");
+    if(grp[grp.length-1].length===3 && grp.length>1) s = s.replace(/,/g,"");
+    else s = s.replace(",",".");
+  } else if(hasD){
+    const grp = s.split(".");
+    if(grp[grp.length-1].length===3 && grp.length>1) s = s.replace(/\./g,"");
+  }
+  const n = parseFloat(s);
+  return isNaN(n)?null:n;
+}
+
+/* ============================ OCR PARSER ============================ */
+const CHARGE_KW = [
+  {re:/\b(ppn|vat|pb1|tax|pajak)\b/i, kind:"tax"},
+  {re:/\b(service|svc|servis|layanan|gratuity|gratuit)\b/i, kind:"service"},
+  {re:/\b(disc|diskon|discount|promo|voucher)\b/i, kind:"discount"},
+];
+const SKIP_KW = /\b(sub\s?total|subtotal|total|grand|amount due|tunai|cash|change|kembali|kembalian|bayar|payment|qty|item|table|meja|tax invoice|npwp|terima kasih|thank|www|telp|phone)\b/i;
+
+function parseReceipt(text){
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const items=[], charges=[];
+  for(const line of lines){
+    const moneyMatch = line.match(/(\d[\d.,]*\d|\d)\s*$/);
+    const charge = CHARGE_KW.find(c=>c.re.test(line));
+    if(charge){
+      const val = parseMoney(moneyMatch && moneyMatch[1]);
+      if(val!=null && val>0){
+        charges.push({ id:uid(), label:line.replace(/[\d.,]+\s*$/,"").trim().slice(0,28)||charge.kind,
+          kind:charge.kind, mode:"amount", value:charge.kind==="discount"?val:val });
+      }
+      continue;
+    }
+    if(SKIP_KW.test(line)) continue;
+    if(!moneyMatch) continue;
+    const price = parseMoney(moneyMatch[1]);
+    if(price==null || price<=0) continue;
+    let name = line.slice(0, moneyMatch.index).trim();
+    // pull a leading qty like "2 " or "2x"
+    let qty=1;
+    const qm = name.match(/^(\d{1,2})\s*[xX]?\s+(.+)/);
+    if(qm){ qty=parseInt(qm[1],10)||1; name=qm[2].trim(); }
+    name = name.replace(/[.\-_]{2,}/g,"").replace(/\s{2,}/g," ").trim();
+    if(name.length<2) continue;
+    items.push({ id:uid(), name:name.slice(0,40), qty, price: qty>1?round2(price/qty):price, assignedTo:[] });
+  }
+  return { items, charges };
+}
+
+/* ============================ SPLIT MATH ============================ */
+function billShares(bill, people){
+  const ids = people.map(p=>p.id);
+  const share = {}; ids.forEach(id=>share[id]=0);
+  const itemsSubtotalBy = {}; ids.forEach(id=>itemsSubtotalBy[id]=0);
+  let itemsTotal = 0;
+
+  if(bill.splitMode==="equal"){
+    const parts = (bill.participants && bill.participants.length ? bill.participants : ids).filter(id=>ids.includes(id));
+    bill.items.forEach(it=>{ itemsTotal += (Number(it.price)||0)*(Number(it.qty)||1); });
+    const chargeNet = chargeAmount(bill, itemsTotal);
+    const grand = itemsTotal + chargeNet;
+    const per = parts.length ? grand/parts.length : 0;
+    parts.forEach(id=>share[id]=per);
+    return { share, itemsTotal, chargeNet, grand };
+  }
+
+  // item mode
+  bill.items.forEach(it=>{
+    const line = (Number(it.price)||0)*(Number(it.qty)||1);
+    itemsTotal += line;
+    const a = (it.assignedTo||[]).filter(id=>ids.includes(id));
+    if(a.length===0) return;
+    const per = line/a.length;
+    a.forEach(id=>itemsSubtotalBy[id]+=per);
+  });
+  const chargeNet = chargeAmount(bill, itemsTotal);
+  ids.forEach(id=>{
+    const prop = itemsTotal>0 ? itemsSubtotalBy[id]/itemsTotal : 0;
+    share[id] = itemsSubtotalBy[id] + prop*chargeNet;
+  });
+  return { share, itemsTotal, chargeNet, grand:itemsTotal+chargeNet, itemsSubtotalBy };
+}
+function chargeAmount(bill, base){
+  let sum=0;
+  (bill.charges||[]).forEach(c=>{
+    const v = Number(c.value)||0;
+    const amt = c.mode==="percent" ? base*v/100 : v;
+    sum += c.kind==="discount" ? -amt : amt;
+  });
+  return sum;
+}
+
+function computeBalances(trip){
+  const bal={}; trip.people.forEach(p=>bal[p.id]=0);
+  (trip.bills||[]).forEach(bill=>{
+    const {share} = billShares(bill, trip.people);
+    let total=0;
+    Object.entries(share).forEach(([id,amt])=>{ if(bal[id]!==undefined){ bal[id]-=amt; total+=amt; } });
+    if(bill.paidBy && bal[bill.paidBy]!==undefined) bal[bill.paidBy]+=total;
+  });
+  Object.keys(bal).forEach(k=>bal[k]=round2(bal[k]));
+  return bal;
+}
+
+/* greedy min-transaction netting */
+function settle(bal){
+  const cred=[],deb=[];
+  Object.entries(bal).forEach(([id,amt])=>{
+    if(amt>0.009) cred.push({id,amt});
+    else if(amt<-0.009) deb.push({id,amt:-amt});
+  });
+  cred.sort((a,b)=>b.amt-a.amt); deb.sort((a,b)=>b.amt-a.amt);
+  const tx=[]; let i=0,j=0;
+  while(i<deb.length && j<cred.length){
+    const pay = Math.min(deb[i].amt, cred[j].amt);
+    tx.push({ from:deb[i].id, to:cred[j].id, amount:round2(pay) });
+    deb[i].amt-=pay; cred[j].amt-=pay;
+    if(deb[i].amt<0.009) i++;
+    if(cred[j].amt<0.009) j++;
+  }
+  return tx;
+}
+
+/* ============================ APP SHELL ============================ */
+function useHashRoute(){
+  const [hash,setHash]=useState(window.location.hash);
+  useEffect(()=>{ const h=()=>setHash(window.location.hash); window.addEventListener("hashchange",h); return ()=>window.removeEventListener("hashchange",h); },[]);
+  const m = hash.match(/#\/trip\/([\w-]+)/);
+  return m ? {view:"trip",id:m[1]} : {view:"home"};
+}
+const go = path => { window.location.hash = path; };
+
+function App(){
+  const route = useHashRoute();
+  const [toast,setToast]=useState(null);
+  const showToast = useCallback(msg=>{ setToast(msg); setTimeout(()=>setToast(null),1800); },[]);
+  return (
+    <>
+      <Topbar/>
+      <div className="wrap">
+        {route.view==="home" ? <Home showToast={showToast}/> : <Trip id={route.id} showToast={showToast}/>}
+      </div>
+      {toast && <div className="toast">{toast}</div>}
+    </>
+  );
+}
+
+function Topbar(){
+  return (
+    <div className="topbar">
+      <div className="topbar-inner">
+        <a className="brand" href="#/" onClick={()=>go("/")}>
+          <span className="logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 3h16v18l-2.5-1.5L15 21l-3-1.5L9 21l-2.5-1.5L4 21z"/><path d="M8 8h8M8 12h8M8 16h4"/>
+            </svg>
+          </span>
+          <span>
+            <div className="name">EasySplit</div>
+            <div className="tag">Upload · Split · Settle · Done</div>
+          </span>
+        </a>
+        <div className="spacer"></div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ HOME ============================ */
+function Home({showToast}){
+  const [name,setName]=useState("");
+  const recents = listTrips();
+  function create(){
+    const id=newTripId();
+    const trip={ id, name:name.trim()||"Untitled trip", currency:"IDR",
+      people:[], bills:[], confirmations:{}, createdAt:Date.now() };
+    saveTrip(trip); go("/trip/"+id);
+  }
+  return (
+    <div style={{paddingTop:40}}>
+      <div className="hero-tag">● No app · No sign-up · Just a link</div>
+      <h1 className="hero">Split any bill.<br/>Settle in the <span className="accent">fewest</span> transfers.</h1>
+      <p className="lead">Snap a receipt, let it read the items, tag who had what, and EasySplit nets everyone’s debts down to the smallest number of payments. Everything lives at one shareable URL.</p>
+
+      <div className="receipt" style={{padding:22,marginTop:28,maxWidth:520}}>
+        <div className="field">
+          <label>Name this bill / trip</label>
+          <input className="inp" placeholder="e.g. Bali weekend, Friday dinner…" value={name}
+            onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")create();}}/>
+        </div>
+        <button className="btn primary" style={{marginTop:16,width:"100%",justifyContent:"center",fontSize:"1rem",padding:"13px"}} onClick={create}>
+          Start a new split →
+        </button>
+        <p className="tiny muted" style={{marginTop:10,marginBottom:0}}>You’ll get a permanent link like <span className="kbd">#/trip/warm-otter-3f9</span> — bookmark or share it.</p>
+      </div>
+
+      {recents.length>0 && (
+        <div style={{marginTop:30,maxWidth:520}}>
+          <h3 className="disp" style={{marginBottom:10}}>Recent splits on this device</h3>
+          <div className="recent">
+            {recents.map(t=>(
+              <a key={t.id} href={"#/trip/"+t.id} onClick={()=>go("/trip/"+t.id)}>
+                <span>{t.name}</span>
+                <span className="mono tiny muted">{t.id}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid-steps">
+        <div className="step"><div className="n">01 / SCAN</div><h4>Upload a receipt</h4><p>Photo or screenshot. OCR pulls out items, prices, tax & service.</p></div>
+        <div className="step"><div className="n">02 / TAG</div><h4>Who had what</h4><p>Assign items per person or share a dish among a few. Or split evenly.</p></div>
+        <div className="step"><div className="n">03 / NET</div><h4>Multi-stop netting</h4><p>Different people paid different places? We consolidate into minimal transfers.</p></div>
+        <div className="step"><div className="n">04 / SETTLE</div><h4>Pay & confirm</h4><p>Creditors add bank/e-wallet info; debtors tick off once they’ve transferred.</p></div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ TRIP ============================ */
+const CURRENCIES=["IDR","USD","EUR","GBP","SGD","MYR","JPY","AUD","INR","THB"];
+
+function Trip({id,showToast}){
+  const [trip,setTrip]=useState(()=>loadTrip(id));
+  const [tab,setTab]=useState("people");
+  const [missing,setMissing]=useState(!loadTrip(id));
+
+  // persist on change
+  useEffect(()=>{ if(trip) saveTrip(trip); },[trip]);
+
+  const update = useCallback(fn=>{ setTrip(prev=>{ const next={...prev}; fn(next); return next; }); },[]);
+
+  if(missing || !trip){
+    return (
+      <div className="empty" style={{paddingTop:60}}>
+        <div className="big">🧾</div>
+        <h2 className="disp">No bill found at this link on this device</h2>
+        <p>This trip isn’t stored in this browser. If a friend shared it, they’ll need to be on a synced backend (see chat notes), or you can start fresh.</p>
+        <button className="btn primary" onClick={()=>go("/")}>← Back to start</button>
+      </div>
+    );
+  }
+
+  const balances = useMemo(()=>computeBalances(trip),[trip]);
+  const cur = trip.currency;
+
+  return (
+    <div style={{paddingTop:22}}>
+      <div className="between" style={{flexWrap:"wrap",gap:14}}>
+        <div style={{flex:1,minWidth:220}}>
+          <input className="inp disp" style={{fontSize:"1.6rem",fontWeight:800,border:"none",background:"transparent",padding:0,width:"100%"}}
+            value={trip.name} onChange={e=>update(t=>t.name=e.target.value)} />
+          <div className="row" style={{gap:8,marginTop:4}}>
+            <span className="mono tiny muted">#{trip.id}</span>
+            <select className="inp mono" style={{padding:"3px 8px",borderWidth:2,fontSize:".8rem"}} value={cur}
+              onChange={e=>update(t=>t.currency=e.target.value)}>
+              {CURRENCIES.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <button className="btn" onClick={()=>{
+          const url = window.location.href.split("#")[0]+"#/trip/"+trip.id;
+          navigator.clipboard?.writeText(url).then(()=>showToast("Link copied ✓"),()=>showToast(url));
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+          Copy share link
+        </button>
+      </div>
+
+      <div className="tabs">
+        <button className={"tab"+(tab==="people"?" active":"")} onClick={()=>setTab("people")}>People<span className="badge">{trip.people.length}</span></button>
+        <button className={"tab"+(tab==="bills"?" active":"")} onClick={()=>setTab("bills")}>Bills<span className="badge">{trip.bills.length}</span></button>
+        <button className={"tab"+(tab==="settle"?" active":"")} onClick={()=>setTab("settle")}>Settle</button>
+      </div>
+
+      <div className="panel">
+        {tab==="people" && <People trip={trip} update={update} balances={balances} cur={cur} goBills={()=>setTab("bills")}/>}
+        {tab==="bills"  && <Bills trip={trip} update={update} cur={cur} showToast={showToast}/>}
+        {tab==="settle" && <Settle trip={trip} update={update} cur={cur} balances={balances} showToast={showToast}/>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- People ---------- */
+function People({trip,update,balances,cur,goBills}){
+  const [name,setName]=useState("");
+  const [confirmId,setConfirmId]=useState(null);
+  function add(){
+    const n=name.trim(); if(!n) return;
+    update(t=>{ t.people=[...t.people,{id:uid(),name:n,pay:""}]; });
+    setName("");
+  }
+  return (
+    <div>
+      <div className="field" style={{maxWidth:420}}>
+        <label>Add everyone splitting this bill</label>
+        <div className="row">
+          <input className="inp" style={{flex:1}} placeholder="Type a name & hit Enter" value={name}
+            onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")add();}}/>
+          <button className="btn primary" onClick={add}>Add</button>
+        </div>
+      </div>
+
+      {trip.people.length===0 ? (
+        <div className="empty"><div className="big">👋</div><p>No one here yet. Add the people sharing expenses to get started.</p></div>
+      ) : (
+        <div style={{marginTop:18,display:"flex",flexDirection:"column",gap:10}}>
+          {trip.people.map(p=>(
+            <div key={p.id} className="receipt" style={{padding:14}}>
+              <div className="between" style={{gap:10}}>
+                <div className="row" style={{gap:10,flex:1,minWidth:0}}>
+                  <span className="avatar" style={{background:colorFor(trip.people,p.id),width:34,height:34,fontSize:".9rem"}}>{initials(p.name)}</span>
+                  <input className="inp" style={{flex:1,fontWeight:700,padding:"6px 10px"}} value={p.name}
+                    onChange={e=>update(t=>{ t.people=t.people.map(x=>x.id===p.id?{...x,name:e.target.value}:x); })}/>
+                </div>
+                <div className="row" style={{gap:8}}>
+                  <span className={"mono"} style={{fontWeight:700,color: balances[p.id]>0.009?"var(--accent-deep)": balances[p.id]<-0.009?"var(--owe)":"var(--ink-soft)"}}>
+                    {balances[p.id]>0.009?"gets ":balances[p.id]<-0.009?"owes ":""}{fmt(Math.abs(balances[p.id]||0),cur)}
+                  </span>
+                  {confirmId===p.id ? (
+                    <div className="row" style={{gap:6}}>
+                      <button className="btn sm" onClick={()=>setConfirmId(null)}>Cancel</button>
+                      <button className="btn owe sm" onClick={()=>{ setConfirmId(null); update(t=>{
+                        t.people=t.people.filter(x=>x.id!==p.id);
+                        t.bills=t.bills.map(b=>({...b, paidBy: b.paidBy===p.id?null:b.paidBy,
+                          participants:(b.participants||[]).filter(i=>i!==p.id),
+                          items:b.items.map(it=>({...it,assignedTo:(it.assignedTo||[]).filter(i=>i!==p.id)}))}));
+                      }); }}>Remove</button>
+                    </div>
+                  ) : (
+                    <button className="iconbtn" title="Remove" onClick={()=>setConfirmId(p.id)}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+              <input className="inp tiny" style={{marginTop:10,padding:"7px 10px"}} placeholder="Payment details (bank / e-wallet) — shown to people paying you back"
+                value={p.pay||""} onChange={e=>update(t=>{ t.people=t.people.map(x=>x.id===p.id?{...x,pay:e.target.value}:x); })}/>
+            </div>
+          ))}
+          <button className="btn ghost" style={{alignSelf:"flex-start",marginTop:4}} onClick={goBills}>Next: add a bill →</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Bills ---------- */
+function Bills({trip,update,cur,showToast}){
+  const [editing,setEditing]=useState(null); // bill id or "new"
+  const [delId,setDelId]=useState(null);
+  function addBill(seed){
+    const bill={ id:uid(), name: seed?.name || ("Place "+(trip.bills.length+1)),
+      paidBy: trip.people[0]?.id || null, splitMode:"item",
+      items: seed?.items || [], charges: seed?.charges || [], participants: trip.people.map(p=>p.id) };
+    update(t=>{ t.bills=[...t.bills,bill]; });
+    setEditing(bill.id);
+  }
+  if(trip.people.length===0)
+    return <div className="empty"><div className="big">🧍</div><p>Add some people first, then create bills.</p></div>;
+
+  const editBill = editing && trip.bills.find(b=>b.id===editing);
+
+  return (
+    <div>
+      {!editing && (
+        <>
+          <div className="row" style={{gap:10,flexWrap:"wrap"}}>
+            <button className="btn primary" onClick={()=>addBill()}>+ Add bill manually</button>
+            <ScanButton trip={trip} onParsed={(seed)=>addBill(seed)} showToast={showToast}/>
+          </div>
+          {trip.bills.length===0 ? (
+            <div className="empty"><div className="big">🧾</div><p>No bills yet. Upload a receipt or add one by hand.</p></div>
+          ) : (
+            <div style={{marginTop:18,display:"flex",flexDirection:"column",gap:12}}>
+              {trip.bills.map(b=>{
+                const {grand} = billShares(b,trip.people);
+                const payer = trip.people.find(p=>p.id===b.paidBy);
+                return (
+                  <div key={b.id} className="receipt" style={{padding:16}}>
+                    <div className="between">
+                      <div>
+                        <div className="disp" style={{fontWeight:800,fontSize:"1.15rem"}}>{b.name}</div>
+                        <div className="tiny muted">{b.items.length} items · {b.splitMode==="equal"?"split evenly":"by item"} · paid by {payer?payer.name:"—"}</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div className="mono" style={{fontWeight:700,fontSize:"1.15rem"}}>{fmt(grand,cur)}</div>
+                        <div className="row" style={{gap:6,marginTop:6,justifyContent:"flex-end"}}>
+                          {delId===b.id ? (
+                            <>
+                              <button className="btn sm" onClick={()=>setDelId(null)}>Cancel</button>
+                              <button className="btn owe sm" onClick={()=>{ setDelId(null); update(t=>{t.bills=t.bills.filter(x=>x.id!==b.id);}); showToast("Bill deleted"); }}>Delete</button>
+                            </>
+                          ) : (
+                            <>
+                              <button className="btn sm" onClick={()=>setEditing(b.id)}>Edit</button>
+                              <button className="iconbtn" style={{width:30,height:30}} title="Delete bill" onClick={()=>setDelId(b.id)}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+      {editBill && <BillEditor bill={editBill} trip={trip} update={update} cur={cur} close={()=>setEditing(null)}
+        remove={()=>{ update(t=>{t.bills=t.bills.filter(x=>x.id!==editBill.id);}); setEditing(null); }}/>}
+    </div>
+  );
+}
+
+function BillEditor({bill,trip,update,cur,close,remove}){
+  const [delConfirm,setDelConfirm]=useState(false);
+  const setBill = fn => update(t=>{ t.bills=t.bills.map(b=>b.id===bill.id?(()=>{const nb={...b}; fn(nb); return nb;})():b); });
+  const {share,itemsTotal,chargeNet,grand,itemsSubtotalBy} = billShares(bill,trip.people);
+
+  function addItem(){ setBill(b=>{ b.items=[...b.items,{id:uid(),name:"",qty:1,price:0,assignedTo:[]}]; }); }
+  function addCharge(kind){ setBill(b=>{ b.charges=[...(b.charges||[]),{id:uid(),label:kind==="tax"?"Tax":kind==="service"?"Service":"Discount",kind,mode:"percent",value:kind==="discount"?5:10}]; }); }
+
+  return (
+    <div className="modal-bg" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
+      <div className="modal">
+        <div className="between" style={{marginBottom:14}}>
+          <input className="inp disp" style={{fontWeight:800,fontSize:"1.2rem",flex:1,marginRight:10}} value={bill.name}
+            onChange={e=>setBill(b=>b.name=e.target.value)}/>
+          <button className="iconbtn" onClick={close} title="Done"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+
+        <div className="row" style={{gap:12,flexWrap:"wrap",marginBottom:8}}>
+          <div className="field" style={{flex:1,minWidth:150}}>
+            <label>Paid by</label>
+            <select className="inp" value={bill.paidBy||""} onChange={e=>setBill(b=>b.paidBy=e.target.value)}>
+              <option value="">— select —</option>
+              {trip.people.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{flex:1,minWidth:150}}>
+            <label>Split method</label>
+            <select className="inp" value={bill.splitMode} onChange={e=>setBill(b=>b.splitMode=e.target.value)}>
+              <option value="item">Item by item</option>
+              <option value="equal">Split evenly</option>
+            </select>
+          </div>
+        </div>
+
+        {bill.splitMode==="equal" ? (
+          <div style={{marginTop:8}}>
+            <label className="tiny" style={{fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--ink-soft)"}}>Who took part</label>
+            <div className="assign-row">
+              {trip.people.map(p=>{
+                const on=(bill.participants||[]).includes(p.id);
+                return <button key={p.id} className={"assign-chip"+(on?" on":"")} style={on?{background:colorFor(trip.people,p.id),borderColor:"var(--ink)"}:{}}
+                  onClick={()=>setBill(b=>{ const s=new Set(b.participants||[]); on?s.delete(p.id):s.add(p.id); b.participants=[...s]; })}>{p.name}</button>;
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        <hr className="dashed"/>
+        <div className="between"><strong className="disp">Items</strong><button className="btn sm" onClick={addItem}>+ item</button></div>
+        <div className="item-line tiny muted" style={{borderBottom:"2px solid var(--ink)",fontWeight:700}}>
+          <span>NAME</span><span>QTY</span><span style={{textAlign:"right"}}>UNIT PRICE</span><span></span>
+        </div>
+        {bill.items.length===0 && <p className="tiny muted" style={{padding:"10px 0"}}>No items yet — add some, or scan a receipt.</p>}
+        {bill.items.map(it=>(
+          <div key={it.id}>
+            <div className="item-line">
+              <input className="inp" style={{padding:"6px 9px"}} placeholder="Item name" value={it.name}
+                onChange={e=>setBill(b=>b.items=b.items.map(x=>x.id===it.id?{...x,name:e.target.value}:x))}/>
+              <input className="inp mono" style={{padding:"6px 6px",textAlign:"center"}} type="number" min="1" value={it.qty}
+                onChange={e=>setBill(b=>b.items=b.items.map(x=>x.id===it.id?{...x,qty:Math.max(1,parseInt(e.target.value)||1)}:x))}/>
+              <input className="inp mono" style={{padding:"6px 8px",textAlign:"right"}} type="number" min="0" step="any" value={it.price}
+                onChange={e=>setBill(b=>b.items=b.items.map(x=>x.id===it.id?{...x,price:parseFloat(e.target.value)||0}:x))}/>
+              <button className="iconbtn" style={{width:30,height:30}} onClick={()=>setBill(b=>b.items=b.items.filter(x=>x.id!==it.id))}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            {bill.splitMode==="item" && (
+              <div className="assign-row" style={{marginBottom:6}}>
+                <span className="tiny muted" style={{alignSelf:"center"}}>shared by:</span>
+                {trip.people.map(p=>{
+                  const on=(it.assignedTo||[]).includes(p.id);
+                  return <button key={p.id} className={"assign-chip"+(on?" on":"")} style={on?{background:colorFor(trip.people,p.id),borderColor:"var(--ink)"}:{}}
+                    onClick={()=>setBill(b=>b.items=b.items.map(x=>{ if(x.id!==it.id) return x; const s=new Set(x.assignedTo||[]); on?s.delete(p.id):s.add(p.id); return {...x,assignedTo:[...s]}; }))}>{p.name}</button>;
+                })}
+                <button className="assign-chip" style={{borderStyle:"dashed"}}
+                  onClick={()=>setBill(b=>b.items=b.items.map(x=>x.id===it.id?{...x,assignedTo:trip.people.map(p=>p.id)}:x))}>everyone</button>
+              </div>
+            )}
+          </div>
+        ))}
+
+        <hr className="dashed"/>
+        <div className="between"><strong className="disp">Tax · Service · Discounts</strong>
+          <div className="row" style={{gap:6}}>
+            <button className="btn sm" onClick={()=>addCharge("tax")}>+ tax</button>
+            <button className="btn sm" onClick={()=>addCharge("service")}>+ service</button>
+            <button className="btn sm" onClick={()=>addCharge("discount")}>+ discount</button>
+          </div>
+        </div>
+        {(bill.charges||[]).length===0 && <p className="tiny muted" style={{padding:"8px 0 0"}}>Charges are spread across people in proportion to what they ordered.</p>}
+        {(bill.charges||[]).map(c=>(
+          <div key={c.id} className="row" style={{gap:8,padding:"8px 0",borderBottom:"1.5px dashed rgba(27,24,19,.22)"}}>
+            <span className={"pill "+(c.kind==="tax"?"tax":c.kind==="discount"?"disc":"svc")}>{c.kind}</span>
+            <input className="inp" style={{flex:1,padding:"6px 9px"}} value={c.label}
+              onChange={e=>setBill(b=>b.charges=b.charges.map(x=>x.id===c.id?{...x,label:e.target.value}:x))}/>
+            <input className="inp mono" style={{width:80,padding:"6px 6px",textAlign:"right"}} type="number" step="any" value={c.value}
+              onChange={e=>setBill(b=>b.charges=b.charges.map(x=>x.id===c.id?{...x,value:parseFloat(e.target.value)||0}:x))}/>
+            <select className="inp" style={{padding:"6px 4px"}} value={c.mode}
+              onChange={e=>setBill(b=>b.charges=b.charges.map(x=>x.id===c.id?{...x,mode:e.target.value}:x))}>
+              <option value="percent">%</option><option value="amount">{cur}</option>
+            </select>
+            <button className="iconbtn" style={{width:30,height:30}} onClick={()=>setBill(b=>b.charges=b.charges.filter(x=>x.id!==c.id))}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        ))}
+
+        <hr className="dashed"/>
+        <div className="between tiny"><span className="muted">Items subtotal</span><span className="mono">{fmt(itemsTotal,cur)}</span></div>
+        <div className="between tiny"><span className="muted">Tax / service / discount</span><span className="mono">{chargeNet<0?"−":""}{fmt(Math.abs(chargeNet),cur)}</span></div>
+        <div className="between" style={{marginTop:4}}><strong>Bill total</strong><strong className="mono">{fmt(grand,cur)}</strong></div>
+
+        <details style={{marginTop:12}}>
+          <summary className="tiny">Per-person breakdown for this bill</summary>
+          <div style={{marginTop:8}}>
+            {trip.people.map(p=>(
+              <div key={p.id} className="between tiny" style={{padding:"3px 0"}}>
+                <span className="row" style={{gap:6}}><span className="avatar" style={{width:18,height:18,fontSize:".6rem",background:colorFor(trip.people,p.id)}}>{initials(p.name)}</span>{p.name}</span>
+                <span className="mono">{fmt(share[p.id]||0,cur)}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+
+        {bill.splitMode==="item" && bill.items.some(it=>(it.assignedTo||[]).length===0 && (Number(it.price)||0)>0) && (
+          <div className="note" style={{marginTop:12}}>⚠ Some priced items aren’t assigned to anyone yet — they won’t be charged to anybody. Tap names under each item.</div>
+        )}
+
+        <div className="between" style={{marginTop:18}}>
+          {delConfirm ? (
+            <div className="row" style={{gap:8}}>
+              <button className="btn sm" onClick={()=>setDelConfirm(false)}>Cancel</button>
+              <button className="btn owe sm" onClick={remove}>Confirm delete</button>
+            </div>
+          ) : (
+            <button className="btn owe" onClick={()=>setDelConfirm(true)}>Delete bill</button>
+          )}
+          <button className="btn primary" onClick={close}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Scan / OCR ---------- */
+function ScanButton({trip,onParsed,showToast}){
+  const inputRef=useRef();
+  const [busy,setBusy]=useState(false);
+  const [prog,setProg]=useState(0);
+
+  async function handleFile(file){
+    if(!file) return;
+    if(typeof Tesseract==="undefined"){
+      showToast("OCR engine couldn’t load — added a blank bill");
+      onParsed({ name:"New bill", items:[], charges:[] });
+      return;
+    }
+    setBusy(true); setProg(0);
+    try{
+      const { data } = await Tesseract.recognize(file, "eng", {
+        logger: m => { if(m.status==="recognizing text") setProg(Math.round(m.progress*100)); }
+      });
+      const parsed = parseReceipt(data.text||"");
+      if(parsed.items.length===0 && parsed.charges.length===0){
+        showToast("Couldn’t read items — fill in manually");
+        onParsed({ name:"Scanned bill", items:[], charges:[] });
+      } else {
+        showToast("Scanned "+parsed.items.length+" items ✓");
+        onParsed({ name:"Scanned bill", items:parsed.items, charges:parsed.charges });
+      }
+    }catch(e){
+      console.error(e);
+      const blocked = /worker|securityerror|blob|origin/i.test(e.message||"");
+      showToast(blocked ? "OCR can’t run in preview — open the hosted file to scan" : "Scan failed — fill in manually");
+      onParsed({ name:"New bill", items:[], charges:[] });
+    }finally{ setBusy(false); setProg(0); }
+  }
+
+  return (
+    <>
+      <input ref={inputRef} type="file" accept="image/*" capture="environment" style={{display:"none"}}
+        onChange={e=>{ const f=e.target.files[0]; e.target.value=""; handleFile(f); }}/>
+      <button className="btn" disabled={busy} onClick={()=>inputRef.current.click()}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+        {busy ? "Reading… "+prog+"%" : "Scan a receipt"}
+      </button>
+      {busy && <div className="bar" style={{flexBasis:"100%",marginTop:4}}><i style={{width:prog+"%"}}/></div>}
+    </>
+  );
+}
+
+/* ---------- Settle ---------- */
+function Settle({trip,update,cur,balances,showToast}){
+  const tx = useMemo(()=>settle(balances),[balances]);
+  const conf = trip.confirmations||{};
+  const nameOf = id => trip.people.find(p=>p.id===id)?.name || "?";
+  const payOf = id => trip.people.find(p=>p.id===id)?.pay || "";
+  const totalSpend = (trip.bills||[]).reduce((s,b)=>s+billShares(b,trip.people).grand,0);
+
+  function confirmTx(t){
+    const key=t.from+"|"+t.to;
+    update(tr=>{ tr.confirmations={...(tr.confirmations||{}), [key]: !((tr.confirmations||{})[key])}; });
+  }
+  function copySummary(){
+    let s = "💸 "+trip.name+" — settle up\n\n";
+    if(tx.length===0) s+="All square — nothing owed! 🎉";
+    else tx.forEach(t=>{ s+= nameOf(t.from)+" → "+nameOf(t.to)+": "+fmt(t.amount,cur)+(payOf(t.to)?("  ("+payOf(t.to)+")"):"")+"\n"; });
+    navigator.clipboard?.writeText(s).then(()=>showToast("Summary copied ✓"),()=>showToast("Copy failed"));
+  }
+
+  if(trip.people.length===0) return <div className="empty"><div className="big">🧍</div><p>Add people and bills to see the settle-up plan.</p></div>;
+
+  return (
+    <div>
+      <div className="between" style={{flexWrap:"wrap",gap:10}}>
+        <div>
+          <div className="disp" style={{fontWeight:800,fontSize:"1.2rem"}}>Settle up</div>
+          <div className="tiny muted">Total spent {fmt(totalSpend,cur)} across {trip.bills.length} bill(s) · netted into <strong>{tx.length}</strong> transfer(s)</div>
+        </div>
+        <button className="btn sm" onClick={copySummary}>Copy summary</button>
+      </div>
+
+      {/* balances overview */}
+      <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:8}}>
+        {trip.people.map(p=>{
+          const b=balances[p.id]||0; const max=Math.max(1,...trip.people.map(x=>Math.abs(balances[x.id]||0)));
+          const pos=b>=0;
+          return (
+            <div key={p.id} className="row" style={{gap:10}}>
+              <span className="row" style={{gap:7,width:130,minWidth:130}}><span className="avatar" style={{width:22,height:22,fontSize:".66rem",background:colorFor(trip.people,p.id)}}>{initials(p.name)}</span><span className="tiny" style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span></span>
+              <div className="balance-bar" style={{flex:1}}>
+                <div style={{height:"100%",width:(Math.abs(b)/max*100)+"%",background:pos?"var(--accent)":"var(--owe)",borderRadius:20}}/>
+              </div>
+              <span className="mono tiny" style={{width:96,textAlign:"right",fontWeight:700,color:pos?"var(--accent-deep)":"var(--owe)"}}>{pos?"+":"−"}{fmt(Math.abs(b),cur)}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <hr className="dashed"/>
+      <strong className="disp">Who pays whom</strong>
+      {tx.length===0 ? (
+        <div className="empty"><div className="big">🎉</div><p>Everyone’s square — no transfers needed.</p></div>
+      ) : (
+        <div style={{marginTop:12}}>
+          {tx.map((t,i)=>{
+            const key=t.from+"|"+t.to; const done=!!conf[key];
+            return (
+              <div key={i} className={"settle-card"+(done?" done":"")}>
+                <div className="between" style={{gap:10,flexWrap:"wrap"}}>
+                  <div className="row" style={{gap:10,flexWrap:"wrap"}}>
+                    <span className="person-chip"><span className="avatar" style={{background:colorFor(trip.people,t.from)}}>{initials(nameOf(t.from))}</span>{nameOf(t.from)}</span>
+                    <span className="arrow">→</span>
+                    <span className="person-chip"><span className="avatar" style={{background:colorFor(trip.people,t.to)}}>{initials(nameOf(t.to))}</span>{nameOf(t.to)}</span>
+                  </div>
+                  <div className="row" style={{gap:10}}>
+                    <span className="mono" style={{fontWeight:700,fontSize:"1.1rem"}}>{fmt(t.amount,cur)}</span>
+                    <button className={"btn sm"+(done?"":" primary")} onClick={()=>confirmTx(t)}>{done?"✓ Paid":"Mark paid"}</button>
+                  </div>
+                </div>
+                {payOf(t.to) && <div className="tiny muted" style={{marginTop:8}}>Pay to: <span className="mono" style={{color:"var(--ink)"}}>{payOf(t.to)}</span></div>}
+                {!payOf(t.to) && <div className="tiny muted" style={{marginTop:8}}>💡 {nameOf(t.to)} hasn’t added payment details (do it in the People tab).</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
