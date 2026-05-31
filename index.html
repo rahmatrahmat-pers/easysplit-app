@@ -201,7 +201,7 @@ const STR = {
     "settle.title":"Settle up","settle.meta":"Total {total} across {n} bill(s) · netted into {tx} transfer(s)",
     "settle.copy":"Copy summary","settle.copied":"Summary copied ✓","settle.who":"Who pays whom",
     "settle.detail":"Per-person expenses","settle.fairNote":"Tax, service & fees are split in proportion to what each person ordered.",
-    "settle.dItems":"Items","settle.dShare":"Total share","settle.dPaid":"Paid","settle.dNet":"Net",
+    "settle.dItems":"Items","settle.dShare":"Total share","settle.dPaid":"Paid","settle.dNet":"Net","settle.shared":"shared",
     "settle.markPaid":"Mark paid","settle.paid":"✓ Paid","settle.payTo":"Pay to:",
     "settle.noPay":"💡 {name} hasn’t added payment details (do it in the People tab).",
     "settle.square":"Everyone’s square — no transfers needed.","settle.needData":"Add people and bills to see the settle-up plan.",
@@ -254,7 +254,7 @@ const STR = {
     "settle.title":"Pelunasan","settle.meta":"Total {total} dari {n} tagihan · digabung jadi {tx} transfer",
     "settle.copy":"Salin ringkasan","settle.copied":"Ringkasan tersalin ✓","settle.who":"Siapa bayar siapa",
     "settle.detail":"Rincian pengeluaran per orang","settle.fairNote":"Pajak, layanan & biaya dibagi sesuai porsi pesanan tiap orang.",
-    "settle.dItems":"Item","settle.dShare":"Total bagian","settle.dPaid":"Dibayar","settle.dNet":"Selisih",
+    "settle.dItems":"Item","settle.dShare":"Total bagian","settle.dPaid":"Dibayar","settle.dNet":"Selisih","settle.shared":"patungan",
     "settle.markPaid":"Tandai lunas","settle.paid":"✓ Lunas","settle.payTo":"Bayar ke:",
     "settle.noPay":"💡 {name} belum menambahkan detail pembayaran (isi di tab Orang).",
     "settle.square":"Semua impas — tidak perlu transfer.","settle.needData":"Tambahkan orang dan tagihan untuk melihat rencana pelunasan.",
@@ -474,16 +474,23 @@ function computeBalances(trip){
 // allocated to each person in proportion to the value of the items they ordered.
 function personBreakdown(trip){
   const ids=trip.people.map(p=>p.id);
-  const out={}; ids.forEach(id=>out[id]={paid:0,items:0,tax:0,service:0,other:0,discount:0,total:0});
+  const out={}; ids.forEach(id=>out[id]={paid:0,items:0,tax:0,service:0,other:0,discount:0,total:0,lines:[]});
+  const multiBill=(trip.bills||[]).length>1;
   (trip.bills||[]).forEach(bill=>{
     const sub={}; ids.forEach(id=>sub[id]=0); let itemsTotal=0;
     if(bill.splitMode==="equal"){
       const parts=(bill.participants&&bill.participants.length?bill.participants:ids).filter(id=>ids.includes(id));
-      bill.items.forEach(it=>itemsTotal+=(Number(it.price)||0)*(Number(it.qty)||1));
-      const per=parts.length?itemsTotal/parts.length:0; parts.forEach(id=>sub[id]+=per);
+      bill.items.forEach(it=>{
+        const line=(Number(it.price)||0)*(Number(it.qty)||1); itemsTotal+=line;
+        if(!parts.length) return; const per=line/parts.length;
+        parts.forEach(id=>{ sub[id]+=per; out[id].lines.push({ name:it.name||"", qty:Number(it.qty)||1, amount:per, shared:parts.length>1, bill:multiBill?bill.name:null }); });
+      });
     } else {
-      bill.items.forEach(it=>{ const line=(Number(it.price)||0)*(Number(it.qty)||1); itemsTotal+=line;
-        const a=(it.assignedTo||[]).filter(id=>ids.includes(id)); if(!a.length) return; const per=line/a.length; a.forEach(id=>sub[id]+=per); });
+      bill.items.forEach(it=>{
+        const line=(Number(it.price)||0)*(Number(it.qty)||1); itemsTotal+=line;
+        const a=(it.assignedTo||[]).filter(id=>ids.includes(id)); if(!a.length) return; const per=line/a.length;
+        a.forEach(id=>{ sub[id]+=per; out[id].lines.push({ name:it.name||"", qty:Number(it.qty)||1, amount:per, shared:a.length>1, bill:multiBill?bill.name:null }); });
+      });
     }
     ids.forEach(id=>out[id].items+=sub[id]);
     (bill.charges||[]).forEach(c=>{
@@ -494,7 +501,8 @@ function personBreakdown(trip){
     if(bill.paidBy && out[bill.paidBy]) out[bill.paidBy].paid += billShares(bill,trip.people).grand;
   });
   ids.forEach(id=>{ const o=out[id]; o.total=round2(o.items+o.tax+o.service+o.other-o.discount);
-    ["paid","items","tax","service","other","discount"].forEach(k=>o[k]=round2(o[k])); });
+    ["paid","items","tax","service","other","discount"].forEach(k=>o[k]=round2(o[k]));
+    o.lines.forEach(l=>l.amount=round2(l.amount)); });
   return out;
 }
 function settle(bal){
@@ -1103,7 +1111,6 @@ function Settle({trip,update,cur,balances,showToast}){
         {trip.people.map(p=>{
           const d=detail[p.id]||{}; const net=round2((d.paid||0)-(d.total||0));
           const rows=[
-            [t("settle.dItems"), d.items],
             [t("label.tax"), d.tax],
             [t("label.service"), d.service],
             [t("label.fee"), d.other],
@@ -1116,6 +1123,21 @@ function Settle({trip,update,cur,balances,showToast}){
                 <span className="mono" style={{fontWeight:700}}>{fmt(d.total||0,cur)}</span>
               </div>
               <div style={{marginTop:8}}>
+                {(Math.abs(d.items||0)>=0.005 || (d.lines||[]).length>0) && (
+                  <div className="between tiny" style={{padding:"2px 0"}}>
+                    <span className="muted">{t("settle.dItems")}</span><span className="mono">{fmt(d.items||0,cur)}</span>
+                  </div>
+                )}
+                {(d.lines||[]).length>0 && (
+                  <div style={{margin:"1px 0 6px",paddingLeft:12}}>
+                    {d.lines.map((l,k)=>(
+                      <div key={k} className="between" style={{padding:"1px 0",fontSize:".74rem",color:"var(--ink-soft)",gap:8}}>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {l.qty>1?l.qty+"× ":""}{l.name||t("editor.itemPh")}{l.shared?" ("+t("settle.shared")+")":""}{l.bill?" — "+l.bill:""}</span>
+                        <span className="mono" style={{flexShrink:0}}>{fmt(l.amount,cur)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {rows.map((r,k)=>(
                   <div key={k} className="between tiny" style={{padding:"2px 0"}}>
                     <span className="muted">{r[0]}</span>
