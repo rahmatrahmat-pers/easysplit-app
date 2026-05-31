@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EasySplit — Unggah. Bagi. Lunasi. Selesai.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F4EEE1; --paper-2:#FCFAF3; --paper-3:#EFE7D6;
+    --ink:#1B1813; --ink-soft:#6E665A; --ink-faint:#A89F8E;
+    --line:#1B1813; --accent:#0E9E6E; --accent-deep:#0a7d57; --accent-soft:#DCF1E7;
+    --owe:#D9492C; --owe-soft:#FBE3DC; --amber:#C98214; --amber-soft:#F6E7C9;
+    --shadow:6px 6px 0 rgba(27,24,19,.9); --shadow-sm:3px 3px 0 rgba(27,24,19,.85);
+    --radius:14px;
+    --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --disp:"Bricolage Grotesque","Hanken Grotesk",system-ui,sans-serif;
+    --body:"Hanken Grotesk",system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:var(--body); color:var(--ink); background-color:var(--paper);
+    background-image:
+      radial-gradient(circle at 18% 12%, rgba(14,158,110,.10), transparent 42%),
+      radial-gradient(circle at 84% 8%, rgba(201,130,20,.12), transparent 40%),
+      radial-gradient(circle at 50% 120%, rgba(217,73,44,.08), transparent 55%);
+    min-height:100vh; -webkit-font-smoothing:antialiased; line-height:1.5;
+  }
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.5;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E");
+  }
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  .disp{font-family:var(--disp);}
+  button{font-family:inherit;cursor:pointer;}
+  input,select,textarea{font-family:inherit;font-size:1rem;}
+  a{color:var(--accent-deep);}
+
+  .wrap{max-width:980px;margin:0 auto;padding:0 18px 90px;}
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(244,238,225,.86);backdrop-filter:blur(8px);border-bottom:2.5px solid var(--ink);}
+  .topbar-inner{max-width:980px;margin:0 auto;padding:12px 18px;display:flex;align-items:center;gap:12px;}
+  .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);}
+  .brand .logo{width:38px;height:38px;border:2.5px solid var(--ink);border-radius:10px;background:var(--accent);display:grid;place-items:center;box-shadow:var(--shadow-sm);transform:rotate(-3deg);}
+  .brand .logo svg{width:22px;height:22px;}
+  .brand .name{font-family:var(--disp);font-weight:800;font-size:1.35rem;letter-spacing:-.02em;line-height:1;}
+  .brand .tag{font-size:.7rem;color:var(--ink-soft);font-weight:600;letter-spacing:.02em;}
+  .spacer{flex:1;}
+  .lang{display:flex;border:2px solid var(--ink);border-radius:9px;overflow:hidden;box-shadow:2px 2px 0 rgba(27,24,19,.8);}
+  .lang button{border:none;background:var(--paper-2);padding:5px 11px;font-weight:700;font-size:.78rem;color:var(--ink-soft);}
+  .lang button.on{background:var(--ink);color:var(--paper);}
+
+  .btn{display:inline-flex;align-items:center;gap:8px;border:2.5px solid var(--ink);background:var(--paper-2);color:var(--ink);
+    padding:10px 16px;border-radius:11px;font-weight:700;font-size:.92rem;box-shadow:var(--shadow-sm);transition:transform .08s ease, box-shadow .08s ease;}
+  .btn:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 rgba(27,24,19,.85);}
+  .btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 rgba(27,24,19,.85);}
+  .btn.primary{background:var(--accent);color:#fff;}
+  .btn.owe{background:var(--owe);color:#fff;}
+  .btn.ghost{box-shadow:none;background:transparent;}
+  .btn.ghost:hover{box-shadow:none;background:rgba(27,24,19,.05);transform:none;}
+  .btn.sm{padding:6px 11px;font-size:.82rem;border-width:2px;border-radius:9px;box-shadow:2px 2px 0 rgba(27,24,19,.8);}
+  .btn.sm:active{transform:translate(2px,2px);box-shadow:0 0 0;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:var(--shadow-sm);}
+  .iconbtn{border:2px solid var(--ink);background:var(--paper-2);width:34px;height:34px;border-radius:9px;display:grid;place-items:center;box-shadow:2px 2px 0 rgba(27,24,19,.8);transition:transform .08s;}
+  .iconbtn:hover{transform:translate(-1px,-1px);}
+  .iconbtn:active{transform:translate(2px,2px);box-shadow:0 0 0;}
+
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);}
+  .inp{border:2.5px solid var(--ink);background:var(--paper-2);border-radius:10px;padding:10px 12px;color:var(--ink);outline:none;}
+  .inp:focus{box-shadow:inset 0 0 0 2px var(--accent-soft);border-color:var(--accent-deep);}
+  .inp.mono{font-family:var(--mono);}
+
+  .receipt{position:relative;background:var(--paper-2);border:2.5px solid var(--ink);border-radius:6px;box-shadow:var(--shadow);}
+  .receipt::before,.receipt::after{content:"";position:absolute;left:-1px;right:-1px;height:9px;background:
+    radial-gradient(circle at 7px 0, transparent 0 5px, var(--paper-2) 5.5px) 0 0/14px 9px repeat-x;}
+  .receipt::before{top:-9px;transform:scaleY(-1);filter:drop-shadow(0 -2.5px 0 var(--ink));}
+  .receipt::after{bottom:-9px;filter:drop-shadow(0 2.5px 0 var(--ink));}
+  .dashed{border:none;border-top:2px dashed var(--ink);opacity:.4;margin:14px 0;}
+
+  .hero-tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;background:var(--ink);color:var(--paper);padding:5px 12px;border-radius:30px;}
+  h1.hero{font-family:var(--disp);font-weight:800;font-size:clamp(2.2rem,5.5vw,4rem);line-height:.98;letter-spacing:-.03em;margin:18px 0 10px;}
+  .hero .accent{color:var(--accent-deep);}
+  .lead{font-size:1.08rem;color:var(--ink-soft);max-width:48ch;}
+
+  .grid-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:26px;}
+  @media(max-width:720px){.grid-steps{grid-template-columns:repeat(2,1fr);}}
+  .step{border:2.5px solid var(--ink);border-radius:12px;padding:14px;background:var(--paper-2);box-shadow:var(--shadow-sm);}
+  .step .n{font-family:var(--mono);font-weight:700;font-size:.75rem;color:var(--accent-deep);}
+  .step h4{font-family:var(--disp);font-weight:700;margin:6px 0 4px;font-size:1.05rem;}
+  .step p{margin:0;font-size:.85rem;color:var(--ink-soft);}
+
+  .tabs{display:flex;gap:6px;border-bottom:2.5px solid var(--ink);margin:20px 0 0;flex-wrap:wrap;}
+  .tab{border:2.5px solid var(--ink);border-bottom:none;background:var(--paper-3);padding:9px 16px;border-radius:11px 11px 0 0;font-weight:700;font-size:.9rem;position:relative;top:2.5px;color:var(--ink-soft);}
+  .tab.active{background:var(--paper-2);color:var(--ink);}
+  .tab .badge{font-family:var(--mono);font-size:.7rem;background:var(--ink);color:var(--paper);border-radius:20px;padding:1px 7px;margin-left:6px;}
+
+  .panel{background:var(--paper-2);border:2.5px solid var(--ink);border-top:none;border-radius:0 0 12px 12px;padding:20px;box-shadow:var(--shadow);}
+
+  .person-chip{display:inline-flex;align-items:center;gap:7px;border:2px solid var(--ink);border-radius:30px;padding:5px 10px 5px 6px;background:var(--paper-2);font-weight:600;font-size:.86rem;}
+  .avatar{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:.72rem;border:2px solid var(--ink);}
+
+  .row{display:flex;align-items:center;gap:10px;}
+  .between{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  .muted{color:var(--ink-soft);}
+  .tiny{font-size:.78rem;}
+  .pill{font-family:var(--mono);font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:20px;border:2px solid var(--ink);text-transform:uppercase;letter-spacing:.04em;}
+  .pill.tax{background:var(--amber-soft);}
+  .pill.svc{background:var(--accent-soft);}
+  .pill.disc{background:var(--owe-soft);}
+  .pill.fee{background:var(--paper-3);}
+
+  .item-line{display:grid;grid-template-columns:1fr 60px 112px 36px;gap:8px;align-items:center;padding:8px 0;border-bottom:1.5px dashed rgba(27,24,19,.22);}
+  @media(max-width:620px){.item-line{grid-template-columns:1fr 48px 92px 32px;}}
+  .assign-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .assign-chip{font-size:.78rem;font-weight:600;border:2px solid var(--ink);border-radius:20px;padding:3px 9px;background:var(--paper-2);opacity:.5;}
+  .assign-chip.on{opacity:1;color:#fff;}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(27,24,19,.45);z-index:200;display:grid;place-items:start center;padding:30px 14px;overflow:auto;}
+  .modal{width:100%;max-width:640px;background:var(--paper-2);border:2.5px solid var(--ink);border-radius:14px;box-shadow:var(--shadow);padding:22px;}
+
+  .balance-bar{height:14px;border-radius:20px;border:2px solid var(--ink);overflow:hidden;background:var(--paper-3);}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:11px 18px;border-radius:30px;font-weight:600;z-index:500;box-shadow:var(--shadow-sm);animation:pop .25s ease;max-width:90vw;text-align:center;}
+  @keyframes pop{from{transform:translate(-50%,12px);opacity:0;}to{transform:translate(-50%,0);opacity:1;}}
+  .empty{text-align:center;padding:34px 14px;color:var(--ink-soft);}
+  .empty .big{font-size:2.6rem;}
+  .settle-card{border:2.5px solid var(--ink);border-radius:12px;padding:14px;background:var(--paper-2);box-shadow:var(--shadow-sm);margin-bottom:12px;}
+  .settle-card.done{opacity:.62;background:var(--accent-soft);}
+  .arrow{font-family:var(--disp);font-weight:800;font-size:1.3rem;}
+  .kbd{font-family:var(--mono);font-size:.8rem;background:var(--paper-3);border:1.5px solid var(--ink);border-radius:6px;padding:1px 6px;}
+  .note{font-size:.82rem;background:var(--amber-soft);border:2px solid var(--ink);border-radius:10px;padding:9px 12px;}
+  .bar{height:10px;background:var(--paper-3);border:2px solid var(--ink);border-radius:20px;overflow:hidden;}
+  .bar > i{display:block;height:100%;background:var(--accent);transition:width .2s;}
+  details summary{cursor:pointer;font-weight:700;}
+  .recent{display:flex;flex-direction:column;gap:8px;}
+  .recent a{display:flex;justify-content:space-between;align-items:center;text-decoration:none;color:var(--ink);border:2px solid var(--ink);border-radius:10px;padding:10px 13px;background:var(--paper-2);box-shadow:2px 2px 0 rgba(27,24,19,.8);font-weight:600;}
+  .recent a:hover{transform:translate(-1px,-1px);}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } = React;
+
+/* ============================ i18n ============================ */
+const STR = {
+  en:{
+    tagline:"Upload · Split · Settle · Done",
+    "home.tag":"No app · No sign-up · Just a link",
+    "home.h1":"Split any bill.", "home.h2a":"Settle in the ", "home.h2accent":"fewest", "home.h2b":" transfers.",
+    "home.lead":"Snap a receipt, let it read the items, tag who had what, and EasySplit nets everyone’s debts down to the smallest number of payments. Everything lives at one shareable URL.",
+    "home.nameLabel":"Name this bill / trip","home.namePh":"e.g. Bali weekend, Friday dinner…",
+    "home.start":"Start a new split →","home.linkHint":"You’ll get a permanent link you can bookmark or share.",
+    "home.recent":"Recent splits on this device","home.untitled":"Untitled bill",
+    "home.s1t":"Upload a receipt","home.s1d":"Photo or screenshot. OCR pulls out items, prices, tax & service.",
+    "home.s2t":"Who had what","home.s2d":"Assign items per person or share a dish among a few. Or split evenly.",
+    "home.s3t":"Multi-stop netting","home.s3d":"Different people paid different places? We consolidate into minimal transfers.",
+    "home.s4t":"Pay & confirm","home.s4d":"Creditors add bank/e-wallet info; debtors tick off once they’ve transferred.",
+    "step.scan":"SCAN","step.tag":"TAG","step.net":"NET","step.settle":"SETTLE",
+    "trip.copy":"Copy share link","trip.copied":"Link copied ✓",
+    "tab.people":"People","tab.bills":"Bills","tab.settle":"Settle",
+    "trip.missingT":"No bill found at this link on this device",
+    "trip.missingD":"This trip isn’t stored in this browser. If a friend shared it, they’ll need a synced backend, or you can start fresh.",
+    "trip.back":"← Back to start",
+    "people.addLabel":"Add everyone splitting this bill","people.addPh":"Type a name & hit Enter","people.add":"Add",
+    "people.empty":"No one here yet. Add the people sharing expenses to get started.",
+    "people.gets":"gets","people.owes":"owes",
+    "people.payPh":"Payment details (bank / e-wallet) — shown to people paying you back",
+    "people.next":"Next: add a bill →","people.removeConfirm":"Remove {name}?",
+    "common.cancel":"Cancel","common.remove":"Remove","common.delete":"Delete","common.edit":"Edit","common.done":"Done",
+    "bills.addManual":"+ Add bill manually","bills.scan":"Scan a receipt","bills.reading":"Reading… {n}%",
+    "bills.empty":"No bills yet. Upload a receipt or add one by hand.","bills.needPeople":"Add some people first, then create bills.",
+    "bills.meta":"{n} items · {mode} · paid by {payer}","bills.byItem":"by item","bills.evenly":"split evenly","bills.deleted":"Bill deleted",
+    "bill.place":"Place {n}","bill.scanned":"Scanned bill","bill.new":"New bill",
+    "editor.paidBy":"Paid by","editor.select":"— select —","editor.method":"Split method","editor.byItem":"Item by item","editor.evenly":"Split evenly",
+    "editor.partOf":"Who took part","editor.items":"Items","editor.addItem":"+ item",
+    "editor.colName":"NAME","editor.colQty":"QTY","editor.colPrice":"UNIT PRICE","editor.itemPh":"Item name",
+    "editor.noItems":"No items yet — add some, or scan a receipt.","editor.sharedBy":"shared by:","editor.everyone":"everyone",
+    "editor.chargesTitle":"Tax · Service · Fees","editor.addTax":"+ tax","editor.addService":"+ service","editor.addFee":"+ fee","editor.addDiscount":"+ discount",
+    "editor.chargesHelp":"Charges are spread across people in proportion to what they ordered.",
+    "editor.subtotal":"Items subtotal","editor.chargesNet":"Tax · service · fees","editor.total":"Bill total",
+    "editor.totalHint":"Edit the total to match the receipt — any difference becomes a rounding line.",
+    "editor.breakdown":"Per-person breakdown for this bill",
+    "editor.warnUnassigned":"⚠ Some priced items aren’t assigned to anyone yet — they won’t be charged to anybody. Tap names under each item.",
+    "editor.deleteBill":"Delete bill","editor.confirmDelete":"Confirm delete",
+    "kind.tax":"tax","kind.service":"service","kind.other":"fee","kind.discount":"discount",
+    "label.tax":"Tax","label.service":"Service","label.fee":"Fee","label.discount":"Discount","label.rounding":"Rounding",
+    "settle.title":"Settle up","settle.meta":"Total {total} across {n} bill(s) · netted into {tx} transfer(s)",
+    "settle.copy":"Copy summary","settle.copied":"Summary copied ✓","settle.who":"Who pays whom",
+    "settle.markPaid":"Mark paid","settle.paid":"✓ Paid","settle.payTo":"Pay to:",
+    "settle.noPay":"💡 {name} hasn’t added payment details (do it in the People tab).",
+    "settle.square":"Everyone’s square — no transfers needed.","settle.needData":"Add people and bills to see the settle-up plan.",
+    "settle.copyHeader":"settle up",
+    "scan.noEngine":"OCR engine couldn’t load — added a blank bill","scan.blocked":"OCR can’t run in preview — open the hosted file to scan",
+    "scan.failed":"Scan failed — fill in manually","scan.noItems":"Couldn’t read items — fill in manually","scan.ok":"Scanned {n} items ✓"
+  },
+  id:{
+    tagline:"Unggah · Bagi · Lunasi · Selesai",
+    "home.tag":"Tanpa aplikasi · Tanpa daftar · Cukup satu tautan",
+    "home.h1":"Bagi tagihan apa pun.", "home.h2a":"Lunasi dengan transfer ", "home.h2accent":"paling sedikit", "home.h2b":".",
+    "home.lead":"Foto struknya, biarkan itemnya terbaca, tandai siapa pesan apa, dan EasySplit meringkas semua utang jadi jumlah pembayaran paling sedikit. Semua tersimpan di satu tautan yang bisa dibagikan.",
+    "home.nameLabel":"Beri nama tagihan / acara","home.namePh":"mis. Liburan Bali, makan malam Jumat…",
+    "home.start":"Mulai patungan baru →","home.linkHint":"Kamu akan dapat tautan permanen yang bisa di-bookmark atau dibagikan.",
+    "home.recent":"Patungan terakhir di perangkat ini","home.untitled":"Tagihan tanpa nama",
+    "home.s1t":"Unggah struk","home.s1d":"Foto atau screenshot. OCR menarik item, harga, pajak & layanan.",
+    "home.s2t":"Siapa pesan apa","home.s2d":"Tandai item per orang atau bagi satu menu untuk beberapa orang. Atau bagi rata.",
+    "home.s3t":"Gabung multi-tempat","home.s3d":"Beda orang bayar beda tempat? Kami gabungkan jadi transfer seminimal mungkin.",
+    "home.s4t":"Bayar & konfirmasi","home.s4d":"Penerima isi info bank/e-wallet; yang berutang centang setelah transfer.",
+    "step.scan":"PINDAI","step.tag":"TANDAI","step.net":"GABUNG","step.settle":"LUNASI",
+    "trip.copy":"Salin tautan","trip.copied":"Tautan tersalin ✓",
+    "tab.people":"Orang","tab.bills":"Tagihan","tab.settle":"Pelunasan",
+    "trip.missingT":"Tagihan tidak ditemukan di tautan ini pada perangkat ini",
+    "trip.missingD":"Tagihan ini tidak tersimpan di browser ini. Jika dibagikan teman, perlu backend tersinkron, atau kamu bisa mulai baru.",
+    "trip.back":"← Kembali ke awal",
+    "people.addLabel":"Tambahkan semua orang yang ikut patungan","people.addPh":"Ketik nama lalu tekan Enter","people.add":"Tambah",
+    "people.empty":"Belum ada orang. Tambahkan orang yang berbagi pengeluaran untuk mulai.",
+    "people.gets":"terima","people.owes":"bayar",
+    "people.payPh":"Detail pembayaran (bank / e-wallet) — ditampilkan ke orang yang membayarmu",
+    "people.next":"Lanjut: tambah tagihan →","people.removeConfirm":"Hapus {name}?",
+    "common.cancel":"Batal","common.remove":"Hapus","common.delete":"Hapus","common.edit":"Ubah","common.done":"Selesai",
+    "bills.addManual":"+ Tambah tagihan manual","bills.scan":"Pindai struk","bills.reading":"Membaca… {n}%",
+    "bills.empty":"Belum ada tagihan. Unggah struk atau tambahkan manual.","bills.needPeople":"Tambahkan orang dulu, lalu buat tagihan.",
+    "bills.meta":"{n} item · {mode} · dibayar oleh {payer}","bills.byItem":"per item","bills.evenly":"bagi rata","bills.deleted":"Tagihan dihapus",
+    "bill.place":"Tempat {n}","bill.scanned":"Tagihan dari struk","bill.new":"Tagihan baru",
+    "editor.paidBy":"Dibayar oleh","editor.select":"— pilih —","editor.method":"Metode bagi","editor.byItem":"Per item","editor.evenly":"Bagi rata",
+    "editor.partOf":"Siapa yang ikut","editor.items":"Item","editor.addItem":"+ item",
+    "editor.colName":"NAMA","editor.colQty":"QTY","editor.colPrice":"HARGA SATUAN","editor.itemPh":"Nama item",
+    "editor.noItems":"Belum ada item — tambahkan, atau pindai struk.","editor.sharedBy":"dibagi oleh:","editor.everyone":"semua",
+    "editor.chargesTitle":"Pajak · Layanan · Biaya","editor.addTax":"+ pajak","editor.addService":"+ layanan","editor.addFee":"+ biaya","editor.addDiscount":"+ diskon",
+    "editor.chargesHelp":"Biaya dibagi ke setiap orang sesuai porsi pesanannya.",
+    "editor.subtotal":"Subtotal item","editor.chargesNet":"Pajak · layanan · biaya","editor.total":"Total tagihan",
+    "editor.totalHint":"Ubah total agar pas dengan struk — selisihnya jadi baris pembulatan.",
+    "editor.breakdown":"Rincian per orang untuk tagihan ini",
+    "editor.warnUnassigned":"⚠ Beberapa item yang ada harganya belum ditandai ke siapa pun — jadi tidak akan ditagih. Ketuk nama di bawah tiap item.",
+    "editor.deleteBill":"Hapus tagihan","editor.confirmDelete":"Konfirmasi hapus",
+    "kind.tax":"pajak","kind.service":"layanan","kind.other":"biaya","kind.discount":"diskon",
+    "label.tax":"Pajak","label.service":"Layanan","label.fee":"Biaya","label.discount":"Diskon","label.rounding":"Pembulatan",
+    "settle.title":"Pelunasan","settle.meta":"Total {total} dari {n} tagihan · digabung jadi {tx} transfer",
+    "settle.copy":"Salin ringkasan","settle.copied":"Ringkasan tersalin ✓","settle.who":"Siapa bayar siapa",
+    "settle.markPaid":"Tandai lunas","settle.paid":"✓ Lunas","settle.payTo":"Bayar ke:",
+    "settle.noPay":"💡 {name} belum menambahkan detail pembayaran (isi di tab Orang).",
+    "settle.square":"Semua impas — tidak perlu transfer.","settle.needData":"Tambahkan orang dan tagihan untuk melihat rencana pelunasan.",
+    "settle.copyHeader":"pelunasan",
+    "scan.noEngine":"Mesin OCR gagal dimuat — ditambahkan tagihan kosong","scan.blocked":"OCR tak bisa jalan di pratinjau — buka file yang di-host untuk memindai",
+    "scan.failed":"Pemindaian gagal — isi manual","scan.noItems":"Item tidak terbaca — isi manual","scan.ok":"Berhasil memindai {n} item ✓"
+  }
+};
+const I18nCtx = createContext({ t:k=>k, lang:"id", setLang:()=>{} });
+const useI18n = ()=>useContext(I18nCtx);
+
+/* ============================ STORAGE ============================ */
+const mem = {};
+const LS = (()=>{ try{ const k="__es_test"; localStorage.setItem(k,"1"); localStorage.removeItem(k); return localStorage; }catch(e){ return null; } })();
+function storeGet(key){ if(LS){ try{ const v=LS.getItem(key); return v?JSON.parse(v):null; }catch(e){} } return mem[key]!==undefined?mem[key]:null; }
+function storeSet(key,val){ mem[key]=val; if(LS){ try{ LS.setItem(key,JSON.stringify(val)); }catch(e){} } }
+const TRIP_KEY = id => "easysplit:trip:"+id;
+const INDEX_KEY = "easysplit:index";
+function listTrips(){ return storeGet(INDEX_KEY) || []; }
+function touchIndex(trip){ let idx = listTrips().filter(t=>t.id!==trip.id); idx.unshift({ id:trip.id, name:trip.name, when:Date.now() }); storeSet(INDEX_KEY, idx.slice(0,12)); }
+function loadTrip(id){ return storeGet(TRIP_KEY(id)); }
+function saveTrip(trip){ storeSet(TRIP_KEY(trip.id), trip); touchIndex(trip); }
+
+/* ============================ HELPERS ============================ */
+const ADJ=["warm","cozy","brisk","sunny","jolly","spicy","mellow","crisp","lucky","fizzy","golden","minty"];
+const ANI=["otter","tapir","koala","gecko","heron","panda","civet","lemur","quokka","manta","ibex","finch"];
+const rnd = a => a[Math.floor(Math.random()*a.length)];
+const uid = () => Math.random().toString(36).slice(2,9);
+function newTripId(){ return rnd(ADJ)+"-"+rnd(ANI)+"-"+Math.random().toString(36).slice(2,5); }
+const COLORS=["#0E9E6E","#D9492C","#C98214","#3B7DD8","#9B4DCA","#0FA9A0","#D64B8A","#5E8C2E","#C2592B","#6A6FE0"];
+const colorFor = (people,id)=>{ const i=people.findIndex(p=>p.id===id); return COLORS[(i<0?0:i)%COLORS.length]; };
+const initials = name => (name||"?").trim().split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase() || "?";
+function fmt(n, cur){
+  n = Number(n)||0;
+  const noDec = ["IDR","JPY","KRW","VND"].includes(cur);
+  try{ return new Intl.NumberFormat(undefined,{style:"currency",currency:cur,minimumFractionDigits:noDec?0:2,maximumFractionDigits:noDec?0:2}).format(n); }
+  catch(e){ return (noDec?Math.round(n):n.toFixed(2))+" "+cur; }
+}
+const round2 = n => Math.round((Number(n)+Number.EPSILON)*100)/100;
+function parseMoney(str){
+  if(!str) return null;
+  let s = (""+str).replace(/[^\d.,]/g,"");
+  if(!s) return null;
+  const hasC=s.includes(","), hasD=s.includes(".");
+  if(hasC&&hasD){ const lc=s.lastIndexOf(","),ld=s.lastIndexOf("."); const dec=lc>ld?",":"."; s=s.replace(new RegExp("\\"+(dec===","?".":","),"g"),"").replace(dec,"."); }
+  else if(hasC){ const g=s.split(","); if(g[g.length-1].length===3&&g.length>1) s=s.replace(/,/g,""); else s=s.replace(",","."); }
+  else if(hasD){ const g=s.split("."); if(g[g.length-1].length===3&&g.length>1) s=s.replace(/\./g,""); }
+  const n=parseFloat(s); return isNaN(n)?null:n;
+}
+
+/* ============================ OCR PARSER ============================ */
+const HEADER_KW = /\b(date|tanggal|tgl|waktu|jam|receipt|struk|no\.?:|nota|cashier|kasir|kassa|customer|pelanggan|pax|table|meja|order|antrian|invoice|faktur|npwp|alamat|telp|phone|jl\.?|jalan|take\s*away|dine\s*in|kunjungan|guest|tamu)\b/i;
+const SUMMARY_START = /(sub\s*total|sub-total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item|^[\W_]*jumlah\b|grand\s*total|total\s*bayar|total\s*belanja|\btotal\b|before\s*round|after\s*round|rounding|pembulatan|\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|service\s*charge|service|svc|servis|layanan|gratuit|disc|diskon|potongan|promo|voucher)/i;
+const PAYMENT_KW = /\b(qris|cash|tunai|debit|kredit|credit|kartu|card|visa|master|bca|bni|bri|mandiri|cimb|permata|danamon|gopay|go-pay|ovo|dana|linkaja|shopee\s*pay|shopeepay|flazz|brizzi|tapcash|e-?money|kembali|kembalian|bayar|payment|tendered|tunai)\b/i;
+const VENUE_KW = /\b(restaurant|resto|cafe|caf[eé]|coffee|kopi|kedai|warung|warteg|rumah\s*makan|depot|bakso|mie|mi\s|ayam|sate|seafood|steak|bakery|toko|mart|market|minimarket|supermarket|food\s*court|foodcourt|eatery|kitchen|bistro|grill|catering)\b/i;
+
+function cleanName(s){
+  return (s||"")
+    .replace(/[•·§¥|»«*_=~^`"\\]+/g," ")
+    .replace(/\.{2,}/g," ")
+    .replace(/^[\s.\-:;,]+/,"")
+    .replace(/[\s.\-:;,]+$/,"")
+    .replace(/\s{2,}/g," ")
+    .trim();
+}
+function trailingPrice(line){
+  const m = line.match(/(-?\d[\d.,]*)\s*$/);
+  if(!m) return null;
+  const value = parseMoney(m[1]);
+  if(value==null) return null;
+  return { value, token:m[1], index:m.index };
+}
+function detectMerchant(lines){
+  const head = lines.slice(0,6).map(l=>l.trim()).filter(Boolean);
+  const ok = l => l && !HEADER_KW.test(l) && !/\d{3,}/.test(l) && (l.match(/[A-Za-z]/g)||[]).length>=3 && l.length<=34;
+  const strip = l => { let n=l.replace(/\s*\b(restaurant|resto|cafe|caf[eé]|coffee|eatery|kitchen|bakery|food\s*court|foodcourt)\b\.?$/i,"").trim(); return n.length>=3?n:l; };
+  // prefer a line that names a venue type (usually the brand line)
+  for(const l of head){ if(ok(l) && VENUE_KW.test(l)) return strip(l).slice(0,32); }
+  for(const l of head){ if(ok(l)) return strip(l).slice(0,32); }
+  return null;
+}
+
+function parseReceipt(text, L){
+  L = L || {};
+  const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  const items=[], charges=[];
+  let phase="head", lastItem=null;
+  const meta={ total:null };
+
+  for(const line of lines){
+    const p = trailingPrice(line);
+    if(phase!=="summary" && SUMMARY_START.test(line)) phase="summary";
+
+    if(phase==="head"){
+      if(HEADER_KW.test(line) || !p) continue;
+      phase="items";
+    }
+
+    if(phase==="items"){
+      if(p && p.value>0){
+        let before = line.slice(0, p.index).trim();
+        let qty=1;
+        const qm = before.match(/(\d{1,3})\s*$/);
+        if(qm){ const q=parseInt(qm[1],10); if(q>=1&&q<=99){ qty=q; before=before.slice(0,qm.index).trim(); } }
+        const name = cleanName(before);
+        if(name.length>=2){
+          lastItem={ id:uid(), name:name.slice(0,48), qty, price: qty>1?round2(p.value/qty):p.value, assignedTo:[] };
+          items.push(lastItem);
+        } else lastItem=null;
+      } else if(lastItem){
+        const extra=cleanName(line);
+        if(extra && !/\d/.test(extra)) lastItem.name=(lastItem.name+" "+extra).slice(0,48).trim();
+      }
+      continue;
+    }
+
+    // summary phase
+    if(!p) continue;
+    const v=p.value, lab=cleanName(line.slice(0,p.index)).slice(0,24);
+    if(/before\s*round/i.test(line)) continue;
+    if(/sub\s*total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item/i.test(line)) continue;
+    if(/round|pembulatan/i.test(line)) continue;                 // reconstructed below
+    if(/grand\s*total|total\s*bayar|total\s*belanja|\btotal\b/i.test(line)){ meta.total=v; continue; }
+    if(PAYMENT_KW.test(line)) continue;
+    if(/\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|\btax\b/i.test(line)){ charges.push({ id:uid(), label:lab||L.tax||"Tax", kind:"tax", mode:"amount", value:v }); continue; }
+    if(/service|svc|servis|layanan|gratuit/i.test(line)){ charges.push({ id:uid(), label:lab||L.service||"Service", kind:"service", mode:"amount", value:v }); continue; }
+    if(/disc|diskon|potongan|promo|voucher/i.test(line)){ charges.push({ id:uid(), label:lab||L.discount||"Discount", kind:"discount", mode:"amount", value:v }); continue; }
+  }
+
+  // reconstruct rounding from the printed total so the bill reconciles
+  const itemsSum = items.reduce((s,it)=>s+(Number(it.price)||0)*(Number(it.qty)||1),0);
+  const chargeSum = charges.reduce((s,c)=>s+(c.kind==="discount"?-c.value:c.value),0);
+  if(meta.total!=null){
+    const diff = round2(meta.total - (itemsSum + chargeSum));
+    if(Math.abs(diff)>=0.5 && Math.abs(diff)<5000)
+      charges.push({ id:uid(), label:L.rounding||"Rounding", kind:"other", mode:"amount", value:diff });
+  }
+  return { name: detectMerchant(lines), items, charges };
+}
+
+/* ============================ SPLIT MATH ============================ */
+function chargeAmount(bill, base){
+  let sum=0;
+  (bill.charges||[]).forEach(c=>{ const v=Number(c.value)||0; const amt=c.mode==="percent"?base*v/100:v; sum += c.kind==="discount"?-amt:amt; });
+  return sum;
+}
+function billShares(bill, people){
+  const ids=people.map(p=>p.id);
+  const share={}; ids.forEach(id=>share[id]=0);
+  if(bill.splitMode==="equal"){
+    const parts=(bill.participants&&bill.participants.length?bill.participants:ids).filter(id=>ids.includes(id));
+    let itemsTotal=0; bill.items.forEach(it=>itemsTotal+=(Number(it.price)||0)*(Number(it.qty)||1));
+    const chargeNet=chargeAmount(bill,itemsTotal); const grand=itemsTotal+chargeNet;
+    const per=parts.length?grand/parts.length:0; parts.forEach(id=>share[id]=per);
+    return { share, itemsTotal, chargeNet, grand };
+  }
+  const sub={}; ids.forEach(id=>sub[id]=0); let itemsTotal=0;
+  bill.items.forEach(it=>{
+    const line=(Number(it.price)||0)*(Number(it.qty)||1); itemsTotal+=line;
+    const a=(it.assignedTo||[]).filter(id=>ids.includes(id)); if(a.length===0) return;
+    const per=line/a.length; a.forEach(id=>sub[id]+=per);
+  });
+  const chargeNet=chargeAmount(bill,itemsTotal);
+  ids.forEach(id=>{ const prop=itemsTotal>0?sub[id]/itemsTotal:0; share[id]=sub[id]+prop*chargeNet; });
+  return { share, itemsTotal, chargeNet, grand:itemsTotal+chargeNet };
+}
+function computeBalances(trip){
+  const bal={}; trip.people.forEach(p=>bal[p.id]=0);
+  (trip.bills||[]).forEach(bill=>{
+    const {share}=billShares(bill,trip.people); let total=0;
+    Object.entries(share).forEach(([id,amt])=>{ if(bal[id]!==undefined){ bal[id]-=amt; total+=amt; } });
+    if(bill.paidBy && bal[bill.paidBy]!==undefined) bal[bill.paidBy]+=total;
+  });
+  Object.keys(bal).forEach(k=>bal[k]=round2(bal[k])); return bal;
+}
+function settle(bal){
+  const cred=[],deb=[];
+  Object.entries(bal).forEach(([id,amt])=>{ if(amt>0.009) cred.push({id,amt}); else if(amt<-0.009) deb.push({id,amt:-amt}); });
+  cred.sort((a,b)=>b.amt-a.amt); deb.sort((a,b)=>b.amt-a.amt);
+  const tx=[]; let i=0,j=0;
+  while(i<deb.length&&j<cred.length){
+    const pay=Math.min(deb[i].amt,cred[j].amt);
+    tx.push({ from:deb[i].id, to:cred[j].id, amount:round2(pay) });
+    deb[i].amt-=pay; cred[j].amt-=pay;
+    if(deb[i].amt<0.009) i++; if(cred[j].amt<0.009) j++;
+  }
+  return tx;
+}
+
+/* ============================ APP SHELL ============================ */
+function useHashRoute(){
+  const [hash,setHash]=useState(window.location.hash);
+  useEffect(()=>{ const h=()=>setHash(window.location.hash); window.addEventListener("hashchange",h); return ()=>window.removeEventListener("hashchange",h); },[]);
+  const m = hash.match(/#\/trip\/([\w-]+)/);
+  return m ? {view:"trip",id:m[1]} : {view:"home"};
+}
+const go = path => { window.location.hash = path; };
+
+function App(){
+  const route = useHashRoute();
+  const [toast,setToast]=useState(null);
+  const [lang,setLangState]=useState(()=>storeGet("easysplit:lang")||"id");
+  const setLang = l => { setLangState(l); storeSet("easysplit:lang",l); document.documentElement.lang=l; };
+  const t = useCallback((k,p)=>{ let s=(STR[lang]&&STR[lang][k])||STR.en[k]||k; if(p) Object.keys(p).forEach(x=>{ s=s.split("{"+x+"}").join(p[x]); }); return s; },[lang]);
+  const showToast = useCallback(msg=>{ setToast(msg); setTimeout(()=>setToast(null),1900); },[]);
+  return (
+    <I18nCtx.Provider value={{t,lang,setLang}}>
+      <Topbar/>
+      <div className="wrap">
+        {route.view==="home" ? <Home showToast={showToast}/> : <Trip id={route.id} showToast={showToast}/>}
+      </div>
+      {toast && <div className="toast">{toast}</div>}
+    </I18nCtx.Provider>
+  );
+}
+
+function Topbar(){
+  const {t,lang,setLang}=useI18n();
+  return (
+    <div className="topbar">
+      <div className="topbar-inner">
+        <a className="brand" href="#/" onClick={()=>go("/")}>
+          <span className="logo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 3h16v18l-2.5-1.5L15 21l-3-1.5L9 21l-2.5-1.5L4 21z"/><path d="M8 8h8M8 12h8M8 16h4"/>
+            </svg>
+          </span>
+          <span>
+            <div className="name">EasySplit</div>
+            <div className="tag">{t("tagline")}</div>
+          </span>
+        </a>
+        <div className="spacer"></div>
+        <div className="lang">
+          <button className={lang==="id"?"on":""} onClick={()=>setLang("id")}>ID</button>
+          <button className={lang==="en"?"on":""} onClick={()=>setLang("en")}>EN</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ HOME ============================ */
+function Home({showToast}){
+  const {t}=useI18n();
+  const [name,setName]=useState("");
+  const recents = listTrips();
+  function create(){
+    const id=newTripId();
+    const trip={ id, name:name.trim()||t("home.untitled"), currency:"IDR", people:[], bills:[], confirmations:{}, createdAt:Date.now() };
+    saveTrip(trip); go("/trip/"+id);
+  }
+  return (
+    <div style={{paddingTop:40}}>
+      <div className="hero-tag">● {t("home.tag")}</div>
+      <h1 className="hero">{t("home.h1")}<br/>{t("home.h2a")}<span className="accent">{t("home.h2accent")}</span>{t("home.h2b")}</h1>
+      <p className="lead">{t("home.lead")}</p>
+
+      <div className="receipt" style={{padding:22,marginTop:28,maxWidth:520}}>
+        <div className="field">
+          <label>{t("home.nameLabel")}</label>
+          <input className="inp" placeholder={t("home.namePh")} value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")create();}}/>
+        </div>
+        <button className="btn primary" style={{marginTop:16,width:"100%",justifyContent:"center",fontSize:"1rem",padding:"13px"}} onClick={create}>
+          {t("home.start")}
+        </button>
+        <p className="tiny muted" style={{marginTop:10,marginBottom:0}}>{t("home.linkHint")} <span className="kbd">#/trip/warm-otter-3f9</span></p>
+      </div>
+
+      {recents.length>0 && (
+        <div style={{marginTop:30,maxWidth:520}}>
+          <h3 className="disp" style={{marginBottom:10}}>{t("home.recent")}</h3>
+          <div className="recent">
+            {recents.map(tr=>(
+              <a key={tr.id} href={"#/trip/"+tr.id} onClick={()=>go("/trip/"+tr.id)}><span>{tr.name}</span><span className="mono tiny muted">{tr.id}</span></a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid-steps">
+        <div className="step"><div className="n">01 / {t("step.scan")}</div><h4>{t("home.s1t")}</h4><p>{t("home.s1d")}</p></div>
+        <div className="step"><div className="n">02 / {t("step.tag")}</div><h4>{t("home.s2t")}</h4><p>{t("home.s2d")}</p></div>
+        <div className="step"><div className="n">03 / {t("step.net")}</div><h4>{t("home.s3t")}</h4><p>{t("home.s3d")}</p></div>
+        <div className="step"><div className="n">04 / {t("step.settle")}</div><h4>{t("home.s4t")}</h4><p>{t("home.s4d")}</p></div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ TRIP ============================ */
+const CURRENCIES=["IDR","USD","EUR","GBP","SGD","MYR","JPY","AUD","INR","THB"];
+
+function Trip({id,showToast}){
+  const {t}=useI18n();
+  const [trip,setTrip]=useState(()=>loadTrip(id));
+  const [tab,setTab]=useState("people");
+  const missing = !trip;
+  useEffect(()=>{ if(trip) saveTrip(trip); },[trip]);
+  const update = useCallback(fn=>{ setTrip(prev=>{ const next={...prev}; fn(next); return next; }); },[]);
+
+  if(missing){
+    return (
+      <div className="empty" style={{paddingTop:60}}>
+        <div className="big">🧾</div>
+        <h2 className="disp">{t("trip.missingT")}</h2>
+        <p>{t("trip.missingD")}</p>
+        <button className="btn primary" onClick={()=>go("/")}>{t("trip.back")}</button>
+      </div>
+    );
+  }
+
+  const balances = useMemo(()=>computeBalances(trip),[trip]);
+  const cur = trip.currency;
+  return (
+    <div style={{paddingTop:22}}>
+      <div className="between" style={{flexWrap:"wrap",gap:14}}>
+        <div style={{flex:1,minWidth:220}}>
+          <input className="inp disp" style={{fontSize:"1.6rem",fontWeight:800,border:"none",background:"transparent",padding:0,width:"100%"}}
+            value={trip.name} onChange={e=>update(t=>t.name=e.target.value)} />
+          <div className="row" style={{gap:8,marginTop:4}}>
+            <span className="mono tiny muted">#{trip.id}</span>
+            <select className="inp mono" style={{padding:"3px 8px",borderWidth:2,fontSize:".8rem"}} value={cur} onChange={e=>update(t=>t.currency=e.target.value)}>
+              {CURRENCIES.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+        <button className="btn" onClick={()=>{
+          const url = window.location.href.split("#")[0]+"#/trip/"+trip.id;
+          navigator.clipboard?.writeText(url).then(()=>showToast(t("trip.copied")),()=>showToast(url));
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>
+          {t("trip.copy")}
+        </button>
+      </div>
+
+      <div className="tabs">
+        <button className={"tab"+(tab==="people"?" active":"")} onClick={()=>setTab("people")}>{t("tab.people")}<span className="badge">{trip.people.length}</span></button>
+        <button className={"tab"+(tab==="bills"?" active":"")} onClick={()=>setTab("bills")}>{t("tab.bills")}<span className="badge">{trip.bills.length}</span></button>
+        <button className={"tab"+(tab==="settle"?" active":"")} onClick={()=>setTab("settle")}>{t("tab.settle")}</button>
+      </div>
+
+      <div className="panel">
+        {tab==="people" && <People trip={trip} update={update} balances={balances} cur={cur} goBills={()=>setTab("bills")}/>}
+        {tab==="bills"  && <Bills trip={trip} update={update} cur={cur} showToast={showToast}/>}
+        {tab==="settle" && <Settle trip={trip} update={update} cur={cur} balances={balances} showToast={showToast}/>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- People ---------- */
+function People({trip,update,balances,cur,goBills}){
+  const {t}=useI18n();
+  const [name,setName]=useState("");
+  const [confirmId,setConfirmId]=useState(null);
+  function add(){ const n=name.trim(); if(!n) return; update(t=>{ t.people=[...t.people,{id:uid(),name:n,pay:""}]; }); setName(""); }
+  return (
+    <div>
+      <div className="field" style={{maxWidth:440}}>
+        <label>{t("people.addLabel")}</label>
+        <div className="row">
+          <input className="inp" style={{flex:1}} placeholder={t("people.addPh")} value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")add();}}/>
+          <button className="btn primary" onClick={add}>{t("people.add")}</button>
+        </div>
+      </div>
+      {trip.people.length===0 ? (
+        <div className="empty"><div className="big">👋</div><p>{t("people.empty")}</p></div>
+      ) : (
+        <div style={{marginTop:18,display:"flex",flexDirection:"column",gap:10}}>
+          {trip.people.map(p=>(
+            <div key={p.id} className="receipt" style={{padding:14}}>
+              <div className="between" style={{gap:10}}>
+                <div className="row" style={{gap:10,flex:1,minWidth:0}}>
+                  <span className="avatar" style={{background:colorFor(trip.people,p.id),width:34,height:34,fontSize:".9rem"}}>{initials(p.name)}</span>
+                  <input className="inp" style={{flex:1,fontWeight:700,padding:"6px 10px"}} value={p.name}
+                    onChange={e=>update(t=>{ t.people=t.people.map(x=>x.id===p.id?{...x,name:e.target.value}:x); })}/>
+                </div>
+                <div className="row" style={{gap:8}}>
+                  <span className="mono" style={{fontWeight:700,color: balances[p.id]>0.009?"var(--accent-deep)": balances[p.id]<-0.009?"var(--owe)":"var(--ink-soft)"}}>
+                    {balances[p.id]>0.009?t("people.gets")+" ":balances[p.id]<-0.009?t("people.owes")+" ":""}{fmt(Math.abs(balances[p.id]||0),cur)}
+                  </span>
+                  {confirmId===p.id ? (
+                    <div className="row" style={{gap:6}}>
+                      <button className="btn sm" onClick={()=>setConfirmId(null)}>{t("common.cancel")}</button>
+                      <button className="btn owe sm" onClick={()=>{ setConfirmId(null); update(t=>{
+                        t.people=t.people.filter(x=>x.id!==p.id);
+                        t.bills=t.bills.map(b=>({...b, paidBy: b.paidBy===p.id?null:b.paidBy,
+                          participants:(b.participants||[]).filter(i=>i!==p.id),
+                          items:b.items.map(it=>({...it,assignedTo:(it.assignedTo||[]).filter(i=>i!==p.id)}))}));
+                      }); }}>{t("common.remove")}</button>
+                    </div>
+                  ) : (
+                    <button className="iconbtn" title={t("common.remove")} onClick={()=>setConfirmId(p.id)}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+              <input className="inp tiny" style={{marginTop:10,padding:"7px 10px"}} placeholder={t("people.payPh")}
+                value={p.pay||""} onChange={e=>update(t=>{ t.people=t.people.map(x=>x.id===p.id?{...x,pay:e.target.value}:x); })}/>
+            </div>
+          ))}
+          <button className="btn ghost" style={{alignSelf:"flex-start",marginTop:4}} onClick={goBills}>{t("people.next")}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Bills ---------- */
+function Bills({trip,update,cur,showToast}){
+  const {t}=useI18n();
+  const [editing,setEditing]=useState(null);
+  const [delId,setDelId]=useState(null);
+  function addBill(seed){
+    const bill={ id:uid(), name: (seed&&seed.name) || t("bill.place",{n:trip.bills.length+1}),
+      paidBy: trip.people[0]?.id || null, splitMode:"item",
+      items:(seed&&seed.items)||[], charges:(seed&&seed.charges)||[], participants: trip.people.map(p=>p.id) };
+    update(t=>{ t.bills=[...t.bills,bill]; });
+    setEditing(bill.id);
+  }
+  if(trip.people.length===0) return <div className="empty"><div className="big">🧍</div><p>{t("bills.needPeople")}</p></div>;
+  const editBill = editing && trip.bills.find(b=>b.id===editing);
+  return (
+    <div>
+      {!editing && (
+        <>
+          <div className="row" style={{gap:10,flexWrap:"wrap"}}>
+            <button className="btn primary" onClick={()=>addBill()}>{t("bills.addManual")}</button>
+            <ScanButton onParsed={(seed)=>addBill(seed)} showToast={showToast}/>
+          </div>
+          {trip.bills.length===0 ? (
+            <div className="empty"><div className="big">🧾</div><p>{t("bills.empty")}</p></div>
+          ) : (
+            <div style={{marginTop:18,display:"flex",flexDirection:"column",gap:12}}>
+              {trip.bills.map(b=>{
+                const {grand}=billShares(b,trip.people);
+                const payer=trip.people.find(p=>p.id===b.paidBy);
+                return (
+                  <div key={b.id} className="receipt" style={{padding:16}}>
+                    <div className="between">
+                      <div>
+                        <div className="disp" style={{fontWeight:800,fontSize:"1.15rem"}}>{b.name}</div>
+                        <div className="tiny muted">{t("bills.meta",{n:b.items.length, mode:b.splitMode==="equal"?t("bills.evenly"):t("bills.byItem"), payer:payer?payer.name:"—"})}</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <div className="mono" style={{fontWeight:700,fontSize:"1.15rem"}}>{fmt(grand,cur)}</div>
+                        <div className="row" style={{gap:6,marginTop:6,justifyContent:"flex-end"}}>
+                          {delId===b.id ? (
+                            <>
+                              <button className="btn sm" onClick={()=>setDelId(null)}>{t("common.cancel")}</button>
+                              <button className="btn owe sm" onClick={()=>{ setDelId(null); update(t=>{t.bills=t.bills.filter(x=>x.id!==b.id);}); showToast(t("bills.deleted")); }}>{t("common.delete")}</button>
+                            </>
+                          ) : (
+                            <>
+                              <button className="btn sm" onClick={()=>setEditing(b.id)}>{t("common.edit")}</button>
+                              <button className="iconbtn" style={{width:30,height:30}} title={t("common.delete")} onClick={()=>setDelId(b.id)}>
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+      {editBill && <BillEditor bill={editBill} trip={trip} update={update} cur={cur} close={()=>setEditing(null)}
+        remove={()=>{ update(t=>{t.bills=t.bills.filter(x=>x.id!==editBill.id);}); setEditing(null); }}/>}
+    </div>
+  );
+}
+
+function BillEditor({bill,trip,update,cur,close,remove}){
+  const {t}=useI18n();
+  const [delConfirm,setDelConfirm]=useState(false);
+  const setBill = fn => update(tr=>{ tr.bills=tr.bills.map(b=>b.id===bill.id?(()=>{const nb={...b}; fn(nb); return nb;})():b); });
+  const {share,itemsTotal,chargeNet,grand} = billShares(bill,trip.people);
+
+  function addItem(){ setBill(b=>{ b.items=[...b.items,{id:uid(),name:"",qty:1,price:0,assignedTo:[]}]; }); }
+  function addCharge(kind){ setBill(b=>{ b.charges=[...(b.charges||[]),{ id:uid(),
+    label: kind==="tax"?t("label.tax"):kind==="service"?t("label.service"):kind==="discount"?t("label.discount"):t("label.fee"),
+    kind, mode: kind==="other"?"amount":"percent", value: kind==="discount"?5:kind==="other"?0:10 }]; }); }
+  function setTotal(v){
+    const target=parseFloat(v); if(isNaN(target)) return;
+    setBill(b=>{
+      let itemsT=0; (b.items||[]).forEach(it=>itemsT+=(Number(it.price)||0)*(Number(it.qty)||1));
+      const others=(b.charges||[]).filter(c=>!c._adj);
+      let sumOthers=0; others.forEach(c=>{ const val=Number(c.value)||0; const amt=c.mode==="percent"?itemsT*val/100:val; sumOthers += c.kind==="discount"?-amt:amt; });
+      const adj=round2(target-itemsT-sumOthers);
+      const nc=[...others];
+      if(Math.abs(adj)>=0.005) nc.push({ id:uid(), kind:"other", label:t("label.rounding"), mode:"amount", value:adj, _adj:true });
+      b.charges=nc;
+    });
+  }
+  const kindPill = k => k==="tax"?"tax":k==="discount"?"disc":k==="other"?"fee":"svc";
+
+  return (
+    <div className="modal-bg" onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
+      <div className="modal">
+        <div className="between" style={{marginBottom:14}}>
+          <input className="inp disp" style={{fontWeight:800,fontSize:"1.2rem",flex:1,marginRight:10}} value={bill.name} onChange={e=>setBill(b=>b.name=e.target.value)}/>
+          <button className="iconbtn" onClick={close} title={t("common.done")}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+
+        <div className="row" style={{gap:12,flexWrap:"wrap",marginBottom:8}}>
+          <div className="field" style={{flex:1,minWidth:150}}>
+            <label>{t("editor.paidBy")}</label>
+            <select className="inp" value={bill.paidBy||""} onChange={e=>setBill(b=>b.paidBy=e.target.value)}>
+              <option value="">{t("editor.select")}</option>
+              {trip.people.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{flex:1,minWidth:150}}>
+            <label>{t("editor.method")}</label>
+            <select className="inp" value={bill.splitMode} onChange={e=>setBill(b=>b.splitMode=e.target.value)}>
+              <option value="item">{t("editor.byItem")}</option>
+              <option value="equal">{t("editor.evenly")}</option>
+            </select>
+          </div>
+        </div>
+
+        {bill.splitMode==="equal" && (
+          <div style={{marginTop:8}}>
+            <label className="tiny" style={{fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--ink-soft)"}}>{t("editor.partOf")}</label>
+            <div className="assign-row">
+              {trip.people.map(p=>{ const on=(bill.participants||[]).includes(p.id);
+                return <button key={p.id} className={"assign-chip"+(on?" on":"")} style={on?{background:colorFor(trip.people,p.id),borderColor:"var(--ink)"}:{}}
+                  onClick={()=>setBill(b=>{ const s=new Set(b.participants||[]); on?s.delete(p.id):s.add(p.id); b.participants=[...s]; })}>{p.name}</button>; })}
+            </div>
+          </div>
+        )}
+
+        <hr className="dashed"/>
+        <div className="between"><strong className="disp">{t("editor.items")}</strong><button className="btn sm" onClick={addItem}>{t("editor.addItem")}</button></div>
+        <div className="item-line tiny muted" style={{borderBottom:"2px solid var(--ink)",fontWeight:700}}>
+          <span>{t("editor.colName")}</span><span>{t("editor.colQty")}</span><span style={{textAlign:"right"}}>{t("editor.colPrice")}</span><span></span>
+        </div>
+        {bill.items.length===0 && <p className="tiny muted" style={{padding:"10px 0"}}>{t("editor.noItems")}</p>}
+        {bill.items.map(it=>(
+          <div key={it.id}>
+            <div className="item-line">
+              <input className="inp" style={{padding:"6px 9px"}} placeholder={t("editor.itemPh")} value={it.name}
+                onChange={e=>setBill(b=>b.items=b.items.map(x=>x.id===it.id?{...x,name:e.target.value}:x))}/>
+              <input className="inp mono" style={{padding:"6px 6px",textAlign:"center"}} type="number" min="1" value={it.qty}
+                onChange={e=>setBill(b=>b.items=b.items.map(x=>x.id===it.id?{...x,qty:Math.max(1,parseInt(e.target.value)||1)}:x))}/>
+              <input className="inp mono" style={{padding:"6px 8px",textAlign:"right"}} type="number" min="0" step="any" value={it.price}
+                onChange={e=>setBill(b=>b.items=b.items.map(x=>x.id===it.id?{...x,price:parseFloat(e.target.value)||0}:x))}/>
+              <button className="iconbtn" style={{width:30,height:30}} onClick={()=>setBill(b=>b.items=b.items.filter(x=>x.id!==it.id))}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            {bill.splitMode==="item" && (
+              <div className="assign-row" style={{marginBottom:6}}>
+                <span className="tiny muted" style={{alignSelf:"center"}}>{t("editor.sharedBy")}</span>
+                {trip.people.map(p=>{ const on=(it.assignedTo||[]).includes(p.id);
+                  return <button key={p.id} className={"assign-chip"+(on?" on":"")} style={on?{background:colorFor(trip.people,p.id),borderColor:"var(--ink)"}:{}}
+                    onClick={()=>setBill(b=>b.items=b.items.map(x=>{ if(x.id!==it.id) return x; const s=new Set(x.assignedTo||[]); on?s.delete(p.id):s.add(p.id); return {...x,assignedTo:[...s]}; }))}>{p.name}</button>; })}
+                <button className="assign-chip" style={{borderStyle:"dashed"}} onClick={()=>setBill(b=>b.items=b.items.map(x=>x.id===it.id?{...x,assignedTo:trip.people.map(p=>p.id)}:x))}>{t("editor.everyone")}</button>
+              </div>
+            )}
+          </div>
+        ))}
+
+        <hr className="dashed"/>
+        <div className="between"><strong className="disp">{t("editor.chargesTitle")}</strong>
+          <div className="row" style={{gap:6,flexWrap:"wrap"}}>
+            <button className="btn sm" onClick={()=>addCharge("tax")}>{t("editor.addTax")}</button>
+            <button className="btn sm" onClick={()=>addCharge("service")}>{t("editor.addService")}</button>
+            <button className="btn sm" onClick={()=>addCharge("other")}>{t("editor.addFee")}</button>
+            <button className="btn sm" onClick={()=>addCharge("discount")}>{t("editor.addDiscount")}</button>
+          </div>
+        </div>
+        {(bill.charges||[]).length===0 && <p className="tiny muted" style={{padding:"8px 0 0"}}>{t("editor.chargesHelp")}</p>}
+        {(bill.charges||[]).map(c=>(
+          <div key={c.id} className="row" style={{gap:8,padding:"8px 0",borderBottom:"1.5px dashed rgba(27,24,19,.22)"}}>
+            <span className={"pill "+kindPill(c.kind)}>{t("kind."+c.kind)}</span>
+            <input className="inp" style={{flex:1,padding:"6px 9px"}} value={c.label} onChange={e=>setBill(b=>b.charges=b.charges.map(x=>x.id===c.id?{...x,label:e.target.value}:x))}/>
+            <input className="inp mono" style={{width:84,padding:"6px 6px",textAlign:"right"}} type="number" step="any" value={c.value}
+              onChange={e=>setBill(b=>b.charges=b.charges.map(x=>x.id===c.id?{...x,value:parseFloat(e.target.value)||0}:x))}/>
+            <select className="inp" style={{padding:"6px 4px"}} value={c.mode} onChange={e=>setBill(b=>b.charges=b.charges.map(x=>x.id===c.id?{...x,mode:e.target.value}:x))}>
+              <option value="percent">%</option><option value="amount">{cur}</option>
+            </select>
+            <button className="iconbtn" style={{width:30,height:30}} onClick={()=>setBill(b=>b.charges=b.charges.filter(x=>x.id!==c.id))}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        ))}
+
+        <hr className="dashed"/>
+        <div className="between tiny"><span className="muted">{t("editor.subtotal")}</span><span className="mono">{fmt(itemsTotal,cur)}</span></div>
+        <div className="between tiny"><span className="muted">{t("editor.chargesNet")}</span><span className="mono">{chargeNet<0?"−":""}{fmt(Math.abs(chargeNet),cur)}</span></div>
+        <div className="between" style={{marginTop:6,alignItems:"center"}}>
+          <strong>{t("editor.total")}</strong>
+          <input className="inp mono" style={{width:150,textAlign:"right",fontWeight:700,padding:"7px 9px"}} type="number" step="any"
+            key={"tot"+round2(grand)} defaultValue={round2(grand)}
+            onKeyDown={e=>{ if(e.key==="Enter") e.currentTarget.blur(); }} onBlur={e=>setTotal(e.target.value)}/>
+        </div>
+        <p className="tiny muted" style={{marginTop:4}}>{t("editor.totalHint")}</p>
+
+        <details style={{marginTop:12}}>
+          <summary className="tiny">{t("editor.breakdown")}</summary>
+          <div style={{marginTop:8}}>
+            {trip.people.map(p=>(
+              <div key={p.id} className="between tiny" style={{padding:"3px 0"}}>
+                <span className="row" style={{gap:6}}><span className="avatar" style={{width:18,height:18,fontSize:".6rem",background:colorFor(trip.people,p.id)}}>{initials(p.name)}</span>{p.name}</span>
+                <span className="mono">{fmt(share[p.id]||0,cur)}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+
+        {bill.splitMode==="item" && bill.items.some(it=>(it.assignedTo||[]).length===0 && (Number(it.price)||0)>0) && (
+          <div className="note" style={{marginTop:12}}>{t("editor.warnUnassigned")}</div>
+        )}
+
+        <div className="between" style={{marginTop:18}}>
+          {delConfirm ? (
+            <div className="row" style={{gap:8}}>
+              <button className="btn sm" onClick={()=>setDelConfirm(false)}>{t("common.cancel")}</button>
+              <button className="btn owe sm" onClick={remove}>{t("editor.confirmDelete")}</button>
+            </div>
+          ) : (
+            <button className="btn owe" onClick={()=>setDelConfirm(true)}>{t("editor.deleteBill")}</button>
+          )}
+          <button className="btn primary" onClick={close}>{t("common.done")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Scan / OCR ---------- */
+function ScanButton({onParsed,showToast}){
+  const {t}=useI18n();
+  const inputRef=useRef();
+  const [busy,setBusy]=useState(false);
+  const [prog,setProg]=useState(0);
+  async function handleFile(file){
+    if(!file) return;
+    const L={ tax:t("label.tax"), service:t("label.service"), discount:t("label.discount"), rounding:t("label.rounding") };
+    if(typeof Tesseract==="undefined"){ showToast(t("scan.noEngine")); onParsed({ name:t("bill.new"), items:[], charges:[] }); return; }
+    setBusy(true); setProg(0);
+    try{
+      const { data } = await Tesseract.recognize(file, "ind+eng", { logger:m=>{ if(m.status==="recognizing text") setProg(Math.round(m.progress*100)); } });
+      const parsed = parseReceipt(data.text||"", L);
+      if(parsed.items.length===0 && parsed.charges.length===0){ showToast(t("scan.noItems")); onParsed({ name:parsed.name||t("bill.scanned"), items:[], charges:[] }); }
+      else { showToast(t("scan.ok",{n:parsed.items.length})); onParsed({ name:parsed.name||t("bill.scanned"), items:parsed.items, charges:parsed.charges }); }
+    }catch(e){
+      console.error(e);
+      const blocked=/worker|securityerror|blob|origin/i.test(e.message||"");
+      showToast(blocked?t("scan.blocked"):t("scan.failed"));
+      onParsed({ name:t("bill.new"), items:[], charges:[] });
+    }finally{ setBusy(false); setProg(0); }
+  }
+  return (
+    <>
+      <input ref={inputRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{ const f=e.target.files[0]; e.target.value=""; handleFile(f); }}/>
+      <button className="btn" disabled={busy} onClick={()=>inputRef.current.click()}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><circle cx="12" cy="12" r="3.5"/></svg>
+        {busy ? t("bills.reading",{n:prog}) : t("bills.scan")}
+      </button>
+      {busy && <div className="bar" style={{flexBasis:"100%",marginTop:4}}><i style={{width:prog+"%"}}/></div>}
+    </>
+  );
+}
+
+/* ---------- Settle ---------- */
+function Settle({trip,update,cur,balances,showToast}){
+  const {t}=useI18n();
+  const tx = useMemo(()=>settle(balances),[balances]);
+  const conf = trip.confirmations||{};
+  const nameOf = id => trip.people.find(p=>p.id===id)?.name || "?";
+  const payOf = id => trip.people.find(p=>p.id===id)?.pay || "";
+  const totalSpend = (trip.bills||[]).reduce((s,b)=>s+billShares(b,trip.people).grand,0);
+  function confirmTx(tt){ const key=tt.from+"|"+tt.to; update(tr=>{ tr.confirmations={...(tr.confirmations||{}), [key]: !((tr.confirmations||{})[key])}; }); }
+  function copySummary(){
+    let s = "💸 "+trip.name+" — "+t("settle.copyHeader")+"\n\n";
+    if(tx.length===0) s+=t("settle.square");
+    else tx.forEach(tt=>{ s+= nameOf(tt.from)+" → "+nameOf(tt.to)+": "+fmt(tt.amount,cur)+(payOf(tt.to)?("  ("+payOf(tt.to)+")"):"")+"\n"; });
+    navigator.clipboard?.writeText(s).then(()=>showToast(t("settle.copied")),()=>showToast("…"));
+  }
+  if(trip.people.length===0) return <div className="empty"><div className="big">🧍</div><p>{t("settle.needData")}</p></div>;
+  return (
+    <div>
+      <div className="between" style={{flexWrap:"wrap",gap:10}}>
+        <div>
+          <div className="disp" style={{fontWeight:800,fontSize:"1.2rem"}}>{t("settle.title")}</div>
+          <div className="tiny muted">{t("settle.meta",{total:fmt(totalSpend,cur), n:trip.bills.length, tx:tx.length})}</div>
+        </div>
+        <button className="btn sm" onClick={copySummary}>{t("settle.copy")}</button>
+      </div>
+
+      <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:8}}>
+        {trip.people.map(p=>{
+          const b=balances[p.id]||0; const max=Math.max(1,...trip.people.map(x=>Math.abs(balances[x.id]||0))); const pos=b>=0;
+          return (
+            <div key={p.id} className="row" style={{gap:10}}>
+              <span className="row" style={{gap:7,width:130,minWidth:130}}><span className="avatar" style={{width:22,height:22,fontSize:".66rem",background:colorFor(trip.people,p.id)}}>{initials(p.name)}</span><span className="tiny" style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span></span>
+              <div className="balance-bar" style={{flex:1}}><div style={{height:"100%",width:(Math.abs(b)/max*100)+"%",background:pos?"var(--accent)":"var(--owe)",borderRadius:20}}/></div>
+              <span className="mono tiny" style={{width:96,textAlign:"right",fontWeight:700,color:pos?"var(--accent-deep)":"var(--owe)"}}>{pos?"+":"−"}{fmt(Math.abs(b),cur)}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <hr className="dashed"/>
+      <strong className="disp">{t("settle.who")}</strong>
+      {tx.length===0 ? (
+        <div className="empty"><div className="big">🎉</div><p>{t("settle.square")}</p></div>
+      ) : (
+        <div style={{marginTop:12}}>
+          {tx.map((tt,i)=>{
+            const key=tt.from+"|"+tt.to; const done=!!conf[key];
+            return (
+              <div key={i} className={"settle-card"+(done?" done":"")}>
+                <div className="between" style={{gap:10,flexWrap:"wrap"}}>
+                  <div className="row" style={{gap:10,flexWrap:"wrap"}}>
+                    <span className="person-chip"><span className="avatar" style={{background:colorFor(trip.people,tt.from)}}>{initials(nameOf(tt.from))}</span>{nameOf(tt.from)}</span>
+                    <span className="arrow">→</span>
+                    <span className="person-chip"><span className="avatar" style={{background:colorFor(trip.people,tt.to)}}>{initials(nameOf(tt.to))}</span>{nameOf(tt.to)}</span>
+                  </div>
+                  <div className="row" style={{gap:10}}>
+                    <span className="mono" style={{fontWeight:700,fontSize:"1.1rem"}}>{fmt(tt.amount,cur)}</span>
+                    <button className={"btn sm"+(done?"":" primary")} onClick={()=>confirmTx(tt)}>{done?t("settle.paid"):t("settle.markPaid")}</button>
+                  </div>
+                </div>
+                {payOf(tt.to) ? <div className="tiny muted" style={{marginTop:8}}>{t("settle.payTo")} <span className="mono" style={{color:"var(--ink)"}}>{payOf(tt.to)}</span></div>
+                              : <div className="tiny muted" style={{marginTop:8}}>{t("settle.noPay",{name:nameOf(tt.to)})}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
