@@ -207,9 +207,7 @@ const STR = {
     "settle.square":"Everyone’s square — no transfers needed.","settle.needData":"Add people and bills to see the settle-up plan.",
     "settle.copyHeader":"settle up",
     "scan.noEngine":"OCR engine couldn’t load — added a blank bill","scan.blocked":"OCR can’t run in preview — open the hosted file to scan",
-    "scan.failed":"Scan failed — fill in manually","scan.noItems":"Couldn’t read items — fill in manually","scan.ok":"Scanned {n} items ✓",
-    "scan.reviewTitle":"Review scanned text","scan.reviewHelp":"OCR can misread receipts. Fix any wrong lines below, then import. Tip: keep each item on its own line; the price is the last number on a line.",
-    "scan.preview":"Preview","scan.nameAs":"Bill name","scan.import":"Import {n} items","scan.importEmpty":"Import anyway","scan.nothing":"No items detected yet — edit the text above.","scan.rescan":"Re-scan"
+    "scan.failed":"Scan failed — fill in manually","scan.noItems":"Couldn’t read items — fill in manually","scan.ok":"Scanned {n} items ✓"
   },
   id:{
     tagline:"Unggah · Bagi · Lunasi · Selesai",
@@ -262,9 +260,7 @@ const STR = {
     "settle.square":"Semua impas — tidak perlu transfer.","settle.needData":"Tambahkan orang dan tagihan untuk melihat rencana pelunasan.",
     "settle.copyHeader":"pelunasan",
     "scan.noEngine":"Mesin OCR gagal dimuat — ditambahkan tagihan kosong","scan.blocked":"OCR tak bisa jalan di pratinjau — buka file yang di-host untuk memindai",
-    "scan.failed":"Pemindaian gagal — isi manual","scan.noItems":"Item tidak terbaca — isi manual","scan.ok":"Berhasil memindai {n} item ✓",
-    "scan.reviewTitle":"Periksa teks hasil pindai","scan.reviewHelp":"OCR bisa salah baca struk. Perbaiki baris yang salah di bawah, lalu impor. Tip: satu item per baris; harga adalah angka terakhir di baris.",
-    "scan.preview":"Pratinjau","scan.nameAs":"Nama tagihan","scan.import":"Impor {n} item","scan.importEmpty":"Tetap impor","scan.nothing":"Belum ada item terdeteksi — edit teks di atas.","scan.rescan":"Pindai ulang"
+    "scan.failed":"Pemindaian gagal — isi manual","scan.noItems":"Item tidak terbaca — isi manual","scan.ok":"Berhasil memindai {n} item ✓"
   }
 };
 const I18nCtx = createContext({ t:k=>k, lang:"id", setLang:()=>{} });
@@ -311,13 +307,13 @@ function parseMoney(str){
 
 /* ============================ OCR PARSER ============================ */
 const HEADER_KW = /\b(date|tanggal|tgl|waktu|jam|receipt|struk|no\.?:|nota|cashier|kasir|kassa|clerk|customer|pelanggan|pax|table|meja|order|antrian|invoice|faktur|npwp|alamat|telp|telepon|\bhp\b|phone|jl\.?|jalan|take\s*away|dine\s*in|kunjungan|guest|tamu)\b/i;
-const SUMMARY_START = /(sub\s*tot[a4]l?|sub-total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item|^[\W_]*jumlah\b|grand\s*tot[a4]l?|total\s*bayar|total\s*belanja|\btot[a4]l?\b|before\s*round|after\s*round|rounding|pembulatan|\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|service\s*charge|service|svc|servis|layanan|gratuit|disc|diskon|potongan|promo|voucher)/i;
+const SUMMARY_START = /(sub\s*total|sub-total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item|^[\W_]*jumlah\b|grand\s*total|total\s*bayar|total\s*belanja|\btotal\b|before\s*round|after\s*round|rounding|pembulatan|\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|service\s*charge|service|svc|servis|layanan|gratuit|disc|diskon|potongan|promo|voucher)/i;
 const PAYMENT_KW = /\b(qris|cash|tunai|debit|kredit|credit|kartu|card|visa|master|bca|bni|bri|mandiri|cimb|permata|danamon|gopay|go-pay|ovo|dana|linkaja|shopee\s*pay|shopeepay|flazz|brizzi|tapcash|e-?money|kembali|kembalian|bayar|payment|tendered|tunai)\b/i;
 const VENUE_KW = /\b(restaurant|resto|cafe|caf[eé]|coffee|kopi|kedai|warung|warteg|rumah\s*makan|depot|bakso|mie|mi\s|ayam|sate|seafood|steak|bakery|toko|mart|market|minimarket|supermarket|food\s*court|foodcourt|eatery|kitchen|bistro|grill|catering)\b/i;
 // header noise that exposes a trailing number: receipt #, dates, times, phones, addresses, order meta
 const HEAD_NOISE = /^\s*#|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\b\d{1,2}:\d{2}\b|\d{9,}|\b(blok|jl|jalan|gang|gg|rt|rw|kota|kab|kabupaten|kec|kecamatan|kel|kelurahan|desa|provinsi|dki|queue|antrian|collected|order\s*id|customer|grabfood|gofood|shopeefood|gojek)\b/i;
 // delivery-platform section marker — items list usually starts right after it
-const DELIVERY_MARKER = /grab\s*foo|go\s*foo|shopee\s*foo|\bgojek\b/i;
+const DELIVERY_MARKER = /grab\s*food|go\s*food|shopee\s*food|\bgojek\b/i;
 
 function cleanName(s){
   return (s||"")
@@ -363,47 +359,36 @@ function parseItemLine(line){
   return { qty, unit, name, hasName:(name.match(/[A-Za-z]/g)||[]).length>=2 };
 }
 // Layout C — delivery apps (GrabFood/GoFood): item NAME first, then "Nx @unit",
-// with the line subtotal on its own right-aligned line, and add-ons ("+...") nested.
-// OCR often mangles "@"→"8" and "1"→"l", so we read qty loosely and prefer the
-// clean subtotal line for the price rather than the (often corrupted) @unit.
-const GRAB_QTY = /(?:^|\s)([\dlioqsLIOQS]{1,3})\s*x\b/i;
-function grabQty(tok){ const n=parseInt((tok||"").replace(/[lLiI]/g,"1").replace(/[oOqQ]/g,"0").replace(/[sS]/g,"5"),10); return (n>=1&&n<=999)?n:1; }
+// with the line subtotal on its own right-aligned line and add-ons ("+...") nested.
 function parseGrabItems(lines){
-  const items=[]; let buffer=[]; let pending=null; let expectAddonPrice=false;
-  const flushName=()=>{ const n=cleanName(buffer.join(" ")); buffer=[]; return n; };
-  const finalize=()=>{ if(!pending) return;
-    const total = pending._sub!=null ? pending._sub : (pending.unit||0)*pending.qty;
-    pending.price = pending.qty>1 ? round2(total/pending.qty) : total;
-    delete pending._sub; delete pending.unit; delete pending._needsName;
-    items.push(pending); pending=null; };
+  const items=[]; let buffer=[]; let lastItem=null; let expectAddonPrice=false;
+  const flushName = ()=>{ const n=cleanName(buffer.join(" ")); buffer=[]; return n; };
   for(const line of lines){
-    const qm = line.match(GRAB_QTY);
-    const atM = line.match(/@\s*([\d.,]+)/);
-    // a quantity line ("1x", "lx", "2x") starts a NEW item
-    if(qm){
-      finalize();
-      const qty=grabQty(qm[1]);
-      // unit price = the number right after the qty token (often corrupted by @→8; used only as fallback)
-      const after=line.slice(line.indexOf(qm[0])+qm[0].length);
-      const um=after.match(/[\d][\d.,]*/); const unit=um?parseMoney(um[0]):null;
+    const qtyAt = line.match(/(\d{1,3})\s*x\b\s*@?\s*([\d.,]+)/i);   // "2x @70.000"
+    const atOnly = line.match(/@\s*([\d.,]+)/);                       // "@0"
+    if(qtyAt){
+      const qty=parseInt(qtyAt[1],10)||1; const unit=parseMoney(qtyAt[2]);
       const name=flushName();
-      pending={ id:uid(), name:(name||"").slice(0,48), qty, unit:unit||0, price:0, _sub:null, assignedTo:[], _needsName:!name };
+      if(unit!=null){ lastItem={ id:uid(), name:(name||"").slice(0,48), qty, price:unit, assignedTo:[], _needsName:!name }; items.push(lastItem); }
       expectAddonPrice=false; continue;
     }
-    if(/^\s*\+/.test(line)){                                  // add-on name
+    if(/^\s*\+/.test(line)){                                          // add-on name, e.g. "+Less Spicy"
       const addon=cleanName(line.replace(/^\s*\+/,"").replace(/[\d.,]+\s*$/,""));
-      if(pending && addon) pending.name=(pending.name+" +"+addon).slice(0,48);
-      const sp=trailingPrice(line); if(pending && sp && pending._sub==null) pending._sub=sp.value;   // item subtotal printed on add-on line
+      if(lastItem && addon) lastItem.name=(lastItem.name+" +"+addon).slice(0,48);
       buffer=[]; expectAddonPrice=true; continue;
     }
-    if(atM && expectAddonPrice){ expectAddonPrice=false; continue; }   // add-on unit price ("@0") — ignore
+    if(atOnly && expectAddonPrice){                                   // add-on unit price (e.g. "@0")
+      const ap=parseMoney(atOnly[1]);
+      if(lastItem && ap) lastItem.price=round2(lastItem.price + ap/(lastItem.qty||1));
+      expectAddonPrice=false; continue;
+    }
     const p=trailingPrice(line);
     const lettery=(line.match(/[A-Za-z]/g)||[]).length>=2;
-    if(p && !lettery){ if(pending && pending._sub==null) pending._sub=p.value; continue; }   // clean subtotal line
-    const nm=cleanName(line.replace(/[\d.,]+\s*$/,""));       // name fragment
+    if(p && !lettery) continue;                                       // lone subtotal number — ignore (we use qty×unit)
+    const nm=cleanName(line.replace(/[\d.,]+\s*$/,""));               // name fragment (drop any trailing subtotal)
     if(nm) buffer.push(nm);
   }
-  finalize();
+  items.forEach(it=>{ if(it._needsName && !it.name) it.name=""; delete it._needsName; });
   return items;
 }
 function detectMerchant(lines){
@@ -421,7 +406,6 @@ function detectMerchant(lines){
 
 function parseReceipt(text, L){
   L = L || {};
-  text = (text||"").replace(/@/g," ");   // "@" just marks per-piece price — ignore it
   const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   const charges=[];
   const meta={ total:null, grand:null };
@@ -443,16 +427,9 @@ function parseReceipt(text, L){
   }
 
   // ---- Build items: pick the layout that fits ----
-  // GrabFood/GoFood (layout C): item name first, then a "Nx" line with ONE number
-  // after the qty (the unit, possibly @-corrupted) and the subtotal on a separate line.
-  // Sate-style (layout B) puts TWO numbers after the qty (unit + line total) on one line.
-  const qtyGroups = itemLines.map(l=>{ const m=l.match(GRAB_QTY); if(!m) return -1;
-    const rest=l.slice(l.indexOf(m[0])+m[0].length); return (rest.match(/\d[\d.,]*/g)||[]).length; }).filter(g=>g>=0);
-  const hasAt = itemLines.filter(l=>/@\s*\d/.test(l)).length>=2;
-  const single = qtyGroups.filter(g=>g===1).length, multi = qtyGroups.filter(g=>g>=2).length;
-  const grabStyle = hasAt || (qtyGroups.length>=2 && single>=multi);
+  const atStyle = itemLines.filter(l=>/@\s*\d|\d\s*x\s*@/i.test(l)).length>=2;   // layout C (delivery apps)
   let items=[];
-  if(grabStyle){
+  if(atStyle){
     items = parseGrabItems(itemLines);
   } else {
     // are item names ON the priced line (A) or on the NEXT line (B)?
@@ -482,10 +459,10 @@ function parseReceipt(text, L){
     const v=p.value, lab=cleanName(line.slice(0,p.index)).slice(0,24);
     if(/before\s*round/i.test(line)) continue;
     // the receipt's grand total — capture "bayar/amount due" and plain "total" (largest wins)
-    if(/grand\s*tot[a4]l?|total\s*bayar|total\s*tagihan|amount\s*due|\bbayar\b/i.test(line)){ meta.grand=Math.max(meta.grand||0, v); continue; }
-    if(/sub\s*tot[a4]l?|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item/i.test(line)) continue;
+    if(/grand\s*total|total\s*bayar|total\s*tagihan|amount\s*due|\bbayar\b/i.test(line)){ meta.grand=Math.max(meta.grand||0, v); continue; }
+    if(/sub\s*total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item/i.test(line)) continue;
     if(/round|pembulatan/i.test(line)) continue;
-    if(/grand\s*tot[a4]l?|\btot[a4]l?\b/i.test(line)){ meta.total=v; meta.grand=Math.max(meta.grand||0, v); continue; }
+    if(/\btotal\b/i.test(line)){ meta.total=v; meta.grand=Math.max(meta.grand||0, v); continue; }
     if(PAYMENT_KW.test(line)) continue;
     if(/\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|\btax\b/i.test(line)){ charges.push({ id:uid(), label:lab||L.tax||"Tax", kind:"tax", mode:"amount", value:v }); continue; }
     if(/service|svc|servis|layanan|gratuit/i.test(line)){ charges.push({ id:uid(), label:lab||L.service||"Service", kind:"service", mode:"amount", value:v }); continue; }
@@ -1084,6 +1061,7 @@ function BillEditor({bill,trip,update,cur,close,remove}){
   );
 }
 
+/* ---------- Scan / OCR ---------- */
 /* ---------- Scan / OCR ---------- */
 function loadImageEl(file){
   return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=URL.createObjectURL(file); });
