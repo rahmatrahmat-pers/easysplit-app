@@ -474,35 +474,38 @@ function computeBalances(trip){
 // allocated to each person in proportion to the value of the items they ordered.
 function personBreakdown(trip){
   const ids=trip.people.map(p=>p.id);
-  const out={}; ids.forEach(id=>out[id]={paid:0,items:0,tax:0,service:0,other:0,discount:0,total:0,lines:[]});
-  const multiBill=(trip.bills||[]).length>1;
+  const out={}; ids.forEach(id=>out[id]={paid:0,total:0,net:0,bills:[]});
   (trip.bills||[]).forEach(bill=>{
     const sub={}; ids.forEach(id=>sub[id]=0); let itemsTotal=0;
+    const linesBy={}; ids.forEach(id=>linesBy[id]=[]);
     if(bill.splitMode==="equal"){
       const parts=(bill.participants&&bill.participants.length?bill.participants:ids).filter(id=>ids.includes(id));
-      bill.items.forEach(it=>{
-        const line=(Number(it.price)||0)*(Number(it.qty)||1); itemsTotal+=line;
+      bill.items.forEach(it=>{ const line=(Number(it.price)||0)*(Number(it.qty)||1); itemsTotal+=line;
         if(!parts.length) return; const per=line/parts.length;
-        parts.forEach(id=>{ sub[id]+=per; out[id].lines.push({ name:it.name||"", qty:Number(it.qty)||1, amount:per, shared:parts.length>1, bill:multiBill?bill.name:null }); });
-      });
+        parts.forEach(id=>{ sub[id]+=per; linesBy[id].push({ name:it.name||"", qty:Number(it.qty)||1, amount:per, shared:parts.length>1 }); }); });
     } else {
-      bill.items.forEach(it=>{
-        const line=(Number(it.price)||0)*(Number(it.qty)||1); itemsTotal+=line;
+      bill.items.forEach(it=>{ const line=(Number(it.price)||0)*(Number(it.qty)||1); itemsTotal+=line;
         const a=(it.assignedTo||[]).filter(id=>ids.includes(id)); if(!a.length) return; const per=line/a.length;
-        a.forEach(id=>{ sub[id]+=per; out[id].lines.push({ name:it.name||"", qty:Number(it.qty)||1, amount:per, shared:a.length>1, bill:multiBill?bill.name:null }); });
-      });
+        a.forEach(id=>{ sub[id]+=per; linesBy[id].push({ name:it.name||"", qty:Number(it.qty)||1, amount:per, shared:a.length>1 }); }); });
     }
-    ids.forEach(id=>out[id].items+=sub[id]);
+    const chg={}; ids.forEach(id=>chg[id]={tax:0,service:0,other:0,discount:0});
     (bill.charges||[]).forEach(c=>{
       const v=Number(c.value)||0; const amt=c.mode==="percent"?itemsTotal*v/100:v;
       const cat=c.kind==="tax"?"tax":c.kind==="service"?"service":c.kind==="discount"?"discount":"other";
-      ids.forEach(id=>{ const prop=itemsTotal>0?sub[id]/itemsTotal:0; out[id][cat]+=prop*(cat==="discount"?Math.abs(amt):amt); });
+      ids.forEach(id=>{ const prop=itemsTotal>0?sub[id]/itemsTotal:0; chg[id][cat]+=prop*(cat==="discount"?Math.abs(amt):amt); });
+    });
+    ids.forEach(id=>{
+      const o=chg[id], itemsAmt=sub[id];
+      const subtotal=itemsAmt+o.tax+o.service+o.other-o.discount;
+      if(linesBy[id].length || Math.abs(subtotal)>=0.005){
+        out[id].bills.push({ billId:bill.id, billName:bill.name, lines:linesBy[id].map(l=>({...l,amount:round2(l.amount)})),
+          items:round2(itemsAmt), tax:round2(o.tax), service:round2(o.service), other:round2(o.other), discount:round2(o.discount), subtotal:round2(subtotal) });
+        out[id].total+=subtotal;
+      }
     });
     if(bill.paidBy && out[bill.paidBy]) out[bill.paidBy].paid += billShares(bill,trip.people).grand;
   });
-  ids.forEach(id=>{ const o=out[id]; o.total=round2(o.items+o.tax+o.service+o.other-o.discount);
-    ["paid","items","tax","service","other","discount"].forEach(k=>o[k]=round2(o[k]));
-    o.lines.forEach(l=>l.amount=round2(l.amount)); });
+  ids.forEach(id=>{ const o=out[id]; o.total=round2(o.total); o.paid=round2(o.paid); o.net=round2(o.paid-o.total); });
   return out;
 }
 function settle(bal){
@@ -518,8 +521,29 @@ function settle(bal){
   }
   return tx;
 }
-
-/* ============================ APP SHELL ============================ */
+// Pairwise settlement: each person reimburses whoever actually paid for their
+// items, bill by bill. Debts between the SAME pair of people are netted, but we
+// never reroute one person's debt through a third party.
+function settlePairwise(trip){
+  const ids=trip.people.map(p=>p.id);
+  const owe={};  // "debtor|creditor" -> amount
+  (trip.bills||[]).forEach(bill=>{
+    if(!bill.paidBy || !ids.includes(bill.paidBy)) return;
+    const {share}=billShares(bill,trip.people);
+    ids.forEach(id=>{ if(id===bill.paidBy) return; const amt=share[id]||0;
+      if(amt>0.009){ const k=id+"|"+bill.paidBy; owe[k]=(owe[k]||0)+amt; } });
+  });
+  const seen=new Set(), tx=[];
+  Object.keys(owe).forEach(k=>{
+    const [dr,cr]=k.split("|");
+    const pid=[dr,cr].sort().join("|"); if(seen.has(pid)) return; seen.add(pid);
+    const net=round2((owe[dr+"|"+cr]||0)-(owe[cr+"|"+dr]||0));
+    if(net>0.009) tx.push({ from:dr, to:cr, amount:net });
+    else if(net<-0.009) tx.push({ from:cr, to:dr, amount:-net });
+  });
+  tx.sort((a,b)=>b.amount-a.amount);
+  return tx;
+}
 function useHashRoute(){
   const [hash,setHash]=useState(window.location.hash);
   useEffect(()=>{ const h=()=>setHash(window.location.hash); window.addEventListener("hashchange",h); return ()=>window.removeEventListener("hashchange",h); },[]);
@@ -1067,7 +1091,7 @@ function ScanButton({onParsed,showToast}){
 /* ---------- Settle ---------- */
 function Settle({trip,update,cur,balances,showToast}){
   const {t}=useI18n();
-  const tx = useMemo(()=>settle(balances),[balances]);
+  const tx = useMemo(()=>settlePairwise(trip),[trip]);
   const detail = useMemo(()=>personBreakdown(trip),[trip]);
   const conf = trip.confirmations||{};
   const nameOf = id => trip.people.find(p=>p.id===id)?.name || "?";
@@ -1109,13 +1133,8 @@ function Settle({trip,update,cur,balances,showToast}){
       <p className="tiny muted" style={{marginTop:2}}>{t("settle.fairNote")}</p>
       <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:10}}>
         {trip.people.map(p=>{
-          const d=detail[p.id]||{}; const net=round2((d.paid||0)-(d.total||0));
-          const rows=[
-            [t("label.tax"), d.tax],
-            [t("label.service"), d.service],
-            [t("label.fee"), d.other],
-            [t("label.discount"), -(d.discount||0)],
-          ].filter(r=>Math.abs(r[1]||0)>=0.005);
+          const d=detail[p.id]||{bills:[],paid:0,total:0,net:0}; const net=d.net||0;
+          const multi=(d.bills||[]).length>1;
           return (
             <div key={p.id} className="settle-card">
               <div className="between">
@@ -1123,28 +1142,39 @@ function Settle({trip,update,cur,balances,showToast}){
                 <span className="mono" style={{fontWeight:700}}>{fmt(d.total||0,cur)}</span>
               </div>
               <div style={{marginTop:8}}>
-                {(Math.abs(d.items||0)>=0.005 || (d.lines||[]).length>0) && (
-                  <div className="between tiny" style={{padding:"2px 0"}}>
-                    <span className="muted">{t("settle.dItems")}</span><span className="mono">{fmt(d.items||0,cur)}</span>
-                  </div>
-                )}
-                {(d.lines||[]).length>0 && (
-                  <div style={{margin:"1px 0 6px",paddingLeft:12}}>
-                    {d.lines.map((l,k)=>(
-                      <div key={k} className="between" style={{padding:"1px 0",fontSize:".74rem",color:"var(--ink-soft)",gap:8}}>
-                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {l.qty>1?l.qty+"× ":""}{l.name||t("editor.itemPh")}{l.shared?" ("+t("settle.shared")+")":""}{l.bill?" — "+l.bill:""}</span>
-                        <span className="mono" style={{flexShrink:0}}>{fmt(l.amount,cur)}</span>
+                {(d.bills||[]).map((bl,bi)=>{
+                  const rows=[
+                    [t("label.tax"), bl.tax],
+                    [t("label.service"), bl.service],
+                    [t("label.fee"), bl.other],
+                    [t("label.discount"), -(bl.discount||0)],
+                  ].filter(r=>Math.abs(r[1]||0)>=0.005);
+                  return (
+                    <div key={bl.billId} style={{marginBottom: multi?10:4, paddingBottom: multi?6:0, borderBottom: multi && bi<d.bills.length-1?"1.5px dotted rgba(27,24,19,.2)":"none"}}>
+                      {multi && (
+                        <div className="between" style={{padding:"0 0 3px"}}>
+                          <span className="tiny" style={{fontWeight:700}}>{bl.billName}</span>
+                          <span className="mono tiny" style={{fontWeight:700}}>{fmt(bl.subtotal,cur)}</span>
+                        </div>
+                      )}
+                      <div style={{paddingLeft: multi?4:0}}>
+                        {(bl.lines||[]).map((l,k)=>(
+                          <div key={k} className="between" style={{padding:"1px 0",fontSize:".74rem",color:"var(--ink-soft)",gap:8}}>
+                            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {l.qty>1?l.qty+"× ":""}{l.name||t("editor.itemPh")}{l.shared?" ("+t("settle.shared")+")":""}</span>
+                            <span className="mono" style={{flexShrink:0}}>{fmt(l.amount,cur)}</span>
+                          </div>
+                        ))}
+                        {rows.map((r,k)=>(
+                          <div key={k} className="between tiny" style={{padding:"2px 0"}}>
+                            <span className="muted">{r[0]}</span>
+                            <span className="mono">{r[1]<0?"−":""}{fmt(Math.abs(r[1]),cur)}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-                {rows.map((r,k)=>(
-                  <div key={k} className="between tiny" style={{padding:"2px 0"}}>
-                    <span className="muted">{r[0]}</span>
-                    <span className="mono">{r[1]<0?"−":""}{fmt(Math.abs(r[1]),cur)}</span>
-                  </div>
-                ))}
-                <div className="between tiny" style={{padding:"4px 0 0",marginTop:4,borderTop:"1.5px dashed rgba(27,24,19,.3)"}}>
+                    </div>
+                  );
+                })}
+                <div className="between tiny" style={{padding:"4px 0 0",marginTop:2,borderTop:"1.5px dashed rgba(27,24,19,.3)"}}>
                   <span className="muted">{t("settle.dShare")}</span><span className="mono" style={{fontWeight:700}}>{fmt(d.total||0,cur)}</span>
                 </div>
                 <div className="between tiny" style={{padding:"2px 0"}}>
