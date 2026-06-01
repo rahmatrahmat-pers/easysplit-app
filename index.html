@@ -310,8 +310,10 @@ const HEADER_KW = /\b(date|tanggal|tgl|waktu|jam|receipt|struk|no\.?:|nota|cashi
 const SUMMARY_START = /(sub\s*total|sub-total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item|^[\W_]*jumlah\b|grand\s*total|total\s*bayar|total\s*belanja|\btotal\b|before\s*round|after\s*round|rounding|pembulatan|\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|service\s*charge|service|svc|servis|layanan|gratuit|disc|diskon|potongan|promo|voucher)/i;
 const PAYMENT_KW = /\b(qris|cash|tunai|debit|kredit|credit|kartu|card|visa|master|bca|bni|bri|mandiri|cimb|permata|danamon|gopay|go-pay|ovo|dana|linkaja|shopee\s*pay|shopeepay|flazz|brizzi|tapcash|e-?money|kembali|kembalian|bayar|payment|tendered|tunai)\b/i;
 const VENUE_KW = /\b(restaurant|resto|cafe|caf[eé]|coffee|kopi|kedai|warung|warteg|rumah\s*makan|depot|bakso|mie|mi\s|ayam|sate|seafood|steak|bakery|toko|mart|market|minimarket|supermarket|food\s*court|foodcourt|eatery|kitchen|bistro|grill|catering)\b/i;
-// header noise that exposes a trailing number: receipt #, dates, times
-const HEAD_NOISE = /^\s*#|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\b\d{1,2}:\d{2}\b/;
+// header noise that exposes a trailing number: receipt #, dates, times, phones, addresses, order meta
+const HEAD_NOISE = /^\s*#|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\b\d{1,2}:\d{2}\b|\d{9,}|\b(blok|jl|jalan|gang|gg|rt|rw|kota|kab|kabupaten|kec|kecamatan|kel|kelurahan|desa|provinsi|dki|queue|antrian|collected|order\s*id|customer|grabfood|gofood|shopeefood|gojek)\b/i;
+// delivery-platform section marker — items list usually starts right after it
+const DELIVERY_MARKER = /grab\s*food|go\s*food|shopee\s*food|\bgojek\b/i;
 
 function cleanName(s){
   return (s||"")
@@ -356,15 +358,49 @@ function parseItemLine(line){
   const unit = qty>1 ? round2(lineTotal/qty) : lineTotal;
   return { qty, unit, name, hasName:(name.match(/[A-Za-z]/g)||[]).length>=2 };
 }
+// Layout C — delivery apps (GrabFood/GoFood): item NAME first, then "Nx @unit",
+// with the line subtotal on its own right-aligned line and add-ons ("+...") nested.
+function parseGrabItems(lines){
+  const items=[]; let buffer=[]; let lastItem=null; let expectAddonPrice=false;
+  const flushName = ()=>{ const n=cleanName(buffer.join(" ")); buffer=[]; return n; };
+  for(const line of lines){
+    const qtyAt = line.match(/(\d{1,3})\s*x\b\s*@?\s*([\d.,]+)/i);   // "2x @70.000"
+    const atOnly = line.match(/@\s*([\d.,]+)/);                       // "@0"
+    if(qtyAt){
+      const qty=parseInt(qtyAt[1],10)||1; const unit=parseMoney(qtyAt[2]);
+      const name=flushName();
+      if(unit!=null){ lastItem={ id:uid(), name:(name||"").slice(0,48), qty, price:unit, assignedTo:[], _needsName:!name }; items.push(lastItem); }
+      expectAddonPrice=false; continue;
+    }
+    if(/^\s*\+/.test(line)){                                          // add-on name, e.g. "+Less Spicy"
+      const addon=cleanName(line.replace(/^\s*\+/,"").replace(/[\d.,]+\s*$/,""));
+      if(lastItem && addon) lastItem.name=(lastItem.name+" +"+addon).slice(0,48);
+      buffer=[]; expectAddonPrice=true; continue;
+    }
+    if(atOnly && expectAddonPrice){                                   // add-on unit price (e.g. "@0")
+      const ap=parseMoney(atOnly[1]);
+      if(lastItem && ap) lastItem.price=round2(lastItem.price + ap/(lastItem.qty||1));
+      expectAddonPrice=false; continue;
+    }
+    const p=trailingPrice(line);
+    const lettery=(line.match(/[A-Za-z]/g)||[]).length>=2;
+    if(p && !lettery) continue;                                       // lone subtotal number — ignore (we use qty×unit)
+    const nm=cleanName(line.replace(/[\d.,]+\s*$/,""));               // name fragment (drop any trailing subtotal)
+    if(nm) buffer.push(nm);
+  }
+  items.forEach(it=>{ if(it._needsName && !it.name) it.name=""; delete it._needsName; });
+  return items;
+}
 function detectMerchant(lines){
-  const head = lines.slice(0,6).map(l=>l.trim()).filter(Boolean);
+  const head = lines.slice(0,8).map(l=>l.trim()).filter(Boolean);
   const letters = l => (l.match(/[A-Za-z]/g)||[]).length;
-  const stripCode = l => l.replace(/\s+\S*\d+\S*$/,"").trim();   // drop trailing store codes like "SN4444"
+  const stripCode = l => l.replace(/\s+\S*\d+\S*$/,"").trim();              // trailing codes "SN4444"
+  const stripLead = l => l.replace(/^(?:[\d]+[A-Za-z]?\s+)+/,"").trim();    // leading codes "6F 560 "
   const stripGeneric = l => { let n=l.replace(/\s*\b(restaurant|resto|cafe|caf[eé]|coffee|eatery|kitchen|bakery|food\s*court|foodcourt)\b\.?$/i,"").trim(); return n.length>=3?n:l; };
   // pass 1: a line naming a venue type is usually the brand line
   for(const l of head){ if(!HEADER_KW.test(l) && VENUE_KW.test(l) && letters(l)>=3 && l.length<=40){ const n=stripGeneric(stripCode(l)); if(letters(n)>=3) return n.slice(0,32); } }
-  // pass 2: first clean-ish alpha line
-  for(const l of head){ if(!HEADER_KW.test(l) && !/\d{3,}/.test(l) && letters(l)>=3 && l.length<=34) return stripGeneric(l).slice(0,32); }
+  // pass 2: first clean alpha line that isn't header/address/contact noise
+  for(const l of head){ if(HEADER_KW.test(l) || HEAD_NOISE.test(l)) continue; const n=stripGeneric(stripCode(stripLead(l))); if(letters(n)>=3 && n.length<=34) return n.slice(0,32); }
   return null;
 }
 
@@ -375,37 +411,47 @@ function parseReceipt(text, L){
   const meta={ total:null, grand:null };
 
   // ---- Pass 1: split lines into header / item-region / summary ----
+  // If a delivery-app marker (e.g. "*GrabFood*") is present, the item list starts right after it.
+  const markerIdx = lines.findIndex(l=>DELIVERY_MARKER.test(l));
   let phase="head"; const itemLines=[], summaryLines=[];
-  for(const line of lines){
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
     const p = trailingPrice(line);
     if(phase!=="summary" && SUMMARY_START.test(line)) phase="summary";
-    if(phase==="head"){ if(HEADER_KW.test(line) || HEAD_NOISE.test(line) || !p || p.value<=0) continue; phase="items"; }
+    if(phase==="head"){
+      if(markerIdx>=0){ if(i<=markerIdx) continue; phase="items"; }
+      else { if(HEADER_KW.test(line) || HEAD_NOISE.test(line) || !p || p.value<=0) continue; phase="items"; }
+    }
     if(phase==="items"){ itemLines.push(line); continue; }
     summaryLines.push(line);
   }
 
-  // ---- Detect layout: are item names ON the priced line, or on the NEXT line? ----
-  let priced=0, withName=0;
-  itemLines.forEach(l=>{ const pl=parseItemLine(l); if(pl){ priced++; if(pl.hasName) withName++; } });
-  const nameFollows = priced>0 && withName < priced/2;   // layout B (qty x unit \n name)
-
-  // ---- Pass 2: build items ----
-  const items=[]; let lastItem=null;
-  for(const line of itemLines){
-    const pl = parseItemLine(line);
-    if(pl){
-      lastItem={ id:uid(), name:pl.name.slice(0,48), qty:pl.qty, price:pl.unit, assignedTo:[] };
-      lastItem._needsName = !pl.hasName;
-      items.push(lastItem);
-    } else if(lastItem){
-      const extra=cleanName(line);
-      if(!extra) continue;
-      if(lastItem._needsName){ lastItem.name=extra.slice(0,48); lastItem._needsName=false; }
-      else if(!nameFollows && !/\d/.test(extra)){ lastItem.name=(lastItem.name+" "+extra).slice(0,48).trim(); }
-      // layout B: once an item is named, ignore stray text lines (avoids name pile-ups)
+  // ---- Build items: pick the layout that fits ----
+  const atStyle = itemLines.filter(l=>/@\s*\d|\d\s*x\s*@/i.test(l)).length>=2;   // layout C (delivery apps)
+  let items=[];
+  if(atStyle){
+    items = parseGrabItems(itemLines);
+  } else {
+    // are item names ON the priced line (A) or on the NEXT line (B)?
+    let priced=0, withName=0;
+    itemLines.forEach(l=>{ const pl=parseItemLine(l); if(pl){ priced++; if(pl.hasName) withName++; } });
+    const nameFollows = priced>0 && withName < priced/2;
+    let lastItem=null;
+    for(const line of itemLines){
+      const pl = parseItemLine(line);
+      if(pl){
+        lastItem={ id:uid(), name:pl.name.slice(0,48), qty:pl.qty, price:pl.unit, assignedTo:[] };
+        lastItem._needsName = !pl.hasName;
+        items.push(lastItem);
+      } else if(lastItem){
+        const extra=cleanName(line);
+        if(!extra) continue;
+        if(lastItem._needsName){ lastItem.name=extra.slice(0,48); lastItem._needsName=false; }
+        else if(!nameFollows && !/\d/.test(extra)){ lastItem.name=(lastItem.name+" "+extra).slice(0,48).trim(); }
+      }
     }
+    items.forEach(it=>{ delete it._needsName; });
   }
-  items.forEach(it=>{ delete it._needsName; });
 
   // ---- Classify summary lines into charges ----
   for(const line of summaryLines){
