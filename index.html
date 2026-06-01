@@ -207,7 +207,9 @@ const STR = {
     "settle.square":"Everyone’s square — no transfers needed.","settle.needData":"Add people and bills to see the settle-up plan.",
     "settle.copyHeader":"settle up",
     "scan.noEngine":"OCR engine couldn’t load — added a blank bill","scan.blocked":"OCR can’t run in preview — open the hosted file to scan",
-    "scan.failed":"Scan failed — fill in manually","scan.noItems":"Couldn’t read items — fill in manually","scan.ok":"Scanned {n} items ✓"
+    "scan.failed":"Scan failed — fill in manually","scan.noItems":"Couldn’t read items — fill in manually","scan.ok":"Scanned {n} items ✓",
+    "scan.reviewTitle":"Review scanned text","scan.reviewHelp":"OCR can misread receipts. Fix any wrong lines below, then import. Tip: keep each item on its own line; the price is the last number on a line.",
+    "scan.preview":"Preview","scan.nameAs":"Bill name","scan.import":"Import {n} items","scan.importEmpty":"Import anyway","scan.nothing":"No items detected yet — edit the text above.","scan.rescan":"Re-scan"
   },
   id:{
     tagline:"Unggah · Bagi · Lunasi · Selesai",
@@ -260,7 +262,9 @@ const STR = {
     "settle.square":"Semua impas — tidak perlu transfer.","settle.needData":"Tambahkan orang dan tagihan untuk melihat rencana pelunasan.",
     "settle.copyHeader":"pelunasan",
     "scan.noEngine":"Mesin OCR gagal dimuat — ditambahkan tagihan kosong","scan.blocked":"OCR tak bisa jalan di pratinjau — buka file yang di-host untuk memindai",
-    "scan.failed":"Pemindaian gagal — isi manual","scan.noItems":"Item tidak terbaca — isi manual","scan.ok":"Berhasil memindai {n} item ✓"
+    "scan.failed":"Pemindaian gagal — isi manual","scan.noItems":"Item tidak terbaca — isi manual","scan.ok":"Berhasil memindai {n} item ✓",
+    "scan.reviewTitle":"Periksa teks hasil pindai","scan.reviewHelp":"OCR bisa salah baca struk. Perbaiki baris yang salah di bawah, lalu impor. Tip: satu item per baris; harga adalah angka terakhir di baris.",
+    "scan.preview":"Pratinjau","scan.nameAs":"Nama tagihan","scan.import":"Impor {n} item","scan.importEmpty":"Tetap impor","scan.nothing":"Belum ada item terdeteksi — edit teks di atas.","scan.rescan":"Pindai ulang"
   }
 };
 const I18nCtx = createContext({ t:k=>k, lang:"id", setLang:()=>{} });
@@ -307,13 +311,13 @@ function parseMoney(str){
 
 /* ============================ OCR PARSER ============================ */
 const HEADER_KW = /\b(date|tanggal|tgl|waktu|jam|receipt|struk|no\.?:|nota|cashier|kasir|kassa|clerk|customer|pelanggan|pax|table|meja|order|antrian|invoice|faktur|npwp|alamat|telp|telepon|\bhp\b|phone|jl\.?|jalan|take\s*away|dine\s*in|kunjungan|guest|tamu)\b/i;
-const SUMMARY_START = /(sub\s*total|sub-total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item|^[\W_]*jumlah\b|grand\s*total|total\s*bayar|total\s*belanja|\btotal\b|before\s*round|after\s*round|rounding|pembulatan|\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|service\s*charge|service|svc|servis|layanan|gratuit|disc|diskon|potongan|promo|voucher)/i;
+const SUMMARY_START = /(sub\s*tot[a4]l?|sub-total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item|^[\W_]*jumlah\b|grand\s*tot[a4]l?|total\s*bayar|total\s*belanja|\btot[a4]l?\b|before\s*round|after\s*round|rounding|pembulatan|\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|service\s*charge|service|svc|servis|layanan|gratuit|disc|diskon|potongan|promo|voucher)/i;
 const PAYMENT_KW = /\b(qris|cash|tunai|debit|kredit|credit|kartu|card|visa|master|bca|bni|bri|mandiri|cimb|permata|danamon|gopay|go-pay|ovo|dana|linkaja|shopee\s*pay|shopeepay|flazz|brizzi|tapcash|e-?money|kembali|kembalian|bayar|payment|tendered|tunai)\b/i;
 const VENUE_KW = /\b(restaurant|resto|cafe|caf[eé]|coffee|kopi|kedai|warung|warteg|rumah\s*makan|depot|bakso|mie|mi\s|ayam|sate|seafood|steak|bakery|toko|mart|market|minimarket|supermarket|food\s*court|foodcourt|eatery|kitchen|bistro|grill|catering)\b/i;
 // header noise that exposes a trailing number: receipt #, dates, times, phones, addresses, order meta
 const HEAD_NOISE = /^\s*#|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\b\d{1,2}:\d{2}\b|\d{9,}|\b(blok|jl|jalan|gang|gg|rt|rw|kota|kab|kabupaten|kec|kecamatan|kel|kelurahan|desa|provinsi|dki|queue|antrian|collected|order\s*id|customer|grabfood|gofood|shopeefood|gojek)\b/i;
 // delivery-platform section marker — items list usually starts right after it
-const DELIVERY_MARKER = /grab\s*food|go\s*food|shopee\s*food|\bgojek\b/i;
+const DELIVERY_MARKER = /grab\s*foo|go\s*foo|shopee\s*foo|\bgojek\b/i;
 
 function cleanName(s){
   return (s||"")
@@ -359,36 +363,47 @@ function parseItemLine(line){
   return { qty, unit, name, hasName:(name.match(/[A-Za-z]/g)||[]).length>=2 };
 }
 // Layout C — delivery apps (GrabFood/GoFood): item NAME first, then "Nx @unit",
-// with the line subtotal on its own right-aligned line and add-ons ("+...") nested.
+// with the line subtotal on its own right-aligned line, and add-ons ("+...") nested.
+// OCR often mangles "@"→"8" and "1"→"l", so we read qty loosely and prefer the
+// clean subtotal line for the price rather than the (often corrupted) @unit.
+const GRAB_QTY = /(?:^|\s)([\dlioqsLIOQS]{1,3})\s*x\b/i;
+function grabQty(tok){ const n=parseInt((tok||"").replace(/[lLiI]/g,"1").replace(/[oOqQ]/g,"0").replace(/[sS]/g,"5"),10); return (n>=1&&n<=999)?n:1; }
 function parseGrabItems(lines){
-  const items=[]; let buffer=[]; let lastItem=null; let expectAddonPrice=false;
-  const flushName = ()=>{ const n=cleanName(buffer.join(" ")); buffer=[]; return n; };
+  const items=[]; let buffer=[]; let pending=null; let expectAddonPrice=false;
+  const flushName=()=>{ const n=cleanName(buffer.join(" ")); buffer=[]; return n; };
+  const finalize=()=>{ if(!pending) return;
+    const total = pending._sub!=null ? pending._sub : (pending.unit||0)*pending.qty;
+    pending.price = pending.qty>1 ? round2(total/pending.qty) : total;
+    delete pending._sub; delete pending.unit; delete pending._needsName;
+    items.push(pending); pending=null; };
   for(const line of lines){
-    const qtyAt = line.match(/(\d{1,3})\s*x\b\s*@?\s*([\d.,]+)/i);   // "2x @70.000"
-    const atOnly = line.match(/@\s*([\d.,]+)/);                       // "@0"
-    if(qtyAt){
-      const qty=parseInt(qtyAt[1],10)||1; const unit=parseMoney(qtyAt[2]);
+    const qm = line.match(GRAB_QTY);
+    const atM = line.match(/@\s*([\d.,]+)/);
+    // a quantity line ("1x", "lx", "2x") starts a NEW item
+    if(qm){
+      finalize();
+      const qty=grabQty(qm[1]);
+      // unit price = the number right after the qty token (often corrupted by @→8; used only as fallback)
+      const after=line.slice(line.indexOf(qm[0])+qm[0].length);
+      const um=after.match(/[\d][\d.,]*/); const unit=um?parseMoney(um[0]):null;
       const name=flushName();
-      if(unit!=null){ lastItem={ id:uid(), name:(name||"").slice(0,48), qty, price:unit, assignedTo:[], _needsName:!name }; items.push(lastItem); }
+      pending={ id:uid(), name:(name||"").slice(0,48), qty, unit:unit||0, price:0, _sub:null, assignedTo:[], _needsName:!name };
       expectAddonPrice=false; continue;
     }
-    if(/^\s*\+/.test(line)){                                          // add-on name, e.g. "+Less Spicy"
+    if(/^\s*\+/.test(line)){                                  // add-on name
       const addon=cleanName(line.replace(/^\s*\+/,"").replace(/[\d.,]+\s*$/,""));
-      if(lastItem && addon) lastItem.name=(lastItem.name+" +"+addon).slice(0,48);
+      if(pending && addon) pending.name=(pending.name+" +"+addon).slice(0,48);
+      const sp=trailingPrice(line); if(pending && sp && pending._sub==null) pending._sub=sp.value;   // item subtotal printed on add-on line
       buffer=[]; expectAddonPrice=true; continue;
     }
-    if(atOnly && expectAddonPrice){                                   // add-on unit price (e.g. "@0")
-      const ap=parseMoney(atOnly[1]);
-      if(lastItem && ap) lastItem.price=round2(lastItem.price + ap/(lastItem.qty||1));
-      expectAddonPrice=false; continue;
-    }
+    if(atM && expectAddonPrice){ expectAddonPrice=false; continue; }   // add-on unit price ("@0") — ignore
     const p=trailingPrice(line);
     const lettery=(line.match(/[A-Za-z]/g)||[]).length>=2;
-    if(p && !lettery) continue;                                       // lone subtotal number — ignore (we use qty×unit)
-    const nm=cleanName(line.replace(/[\d.,]+\s*$/,""));               // name fragment (drop any trailing subtotal)
+    if(p && !lettery){ if(pending && pending._sub==null) pending._sub=p.value; continue; }   // clean subtotal line
+    const nm=cleanName(line.replace(/[\d.,]+\s*$/,""));       // name fragment
     if(nm) buffer.push(nm);
   }
-  items.forEach(it=>{ if(it._needsName && !it.name) it.name=""; delete it._needsName; });
+  finalize();
   return items;
 }
 function detectMerchant(lines){
@@ -427,9 +442,16 @@ function parseReceipt(text, L){
   }
 
   // ---- Build items: pick the layout that fits ----
-  const atStyle = itemLines.filter(l=>/@\s*\d|\d\s*x\s*@/i.test(l)).length>=2;   // layout C (delivery apps)
+  // GrabFood/GoFood (layout C): item name first, then a "Nx" line with ONE number
+  // after the qty (the unit, possibly @-corrupted) and the subtotal on a separate line.
+  // Sate-style (layout B) puts TWO numbers after the qty (unit + line total) on one line.
+  const qtyGroups = itemLines.map(l=>{ const m=l.match(GRAB_QTY); if(!m) return -1;
+    const rest=l.slice(l.indexOf(m[0])+m[0].length); return (rest.match(/\d[\d.,]*/g)||[]).length; }).filter(g=>g>=0);
+  const hasAt = itemLines.filter(l=>/@\s*\d/.test(l)).length>=2;
+  const single = qtyGroups.filter(g=>g===1).length, multi = qtyGroups.filter(g=>g>=2).length;
+  const grabStyle = hasAt || (qtyGroups.length>=2 && single>=multi);
   let items=[];
-  if(atStyle){
+  if(grabStyle){
     items = parseGrabItems(itemLines);
   } else {
     // are item names ON the priced line (A) or on the NEXT line (B)?
@@ -459,10 +481,10 @@ function parseReceipt(text, L){
     const v=p.value, lab=cleanName(line.slice(0,p.index)).slice(0,24);
     if(/before\s*round/i.test(line)) continue;
     // the receipt's grand total — capture "bayar/amount due" and plain "total" (largest wins)
-    if(/grand\s*total|total\s*bayar|total\s*tagihan|amount\s*due|\bbayar\b/i.test(line)){ meta.grand=Math.max(meta.grand||0, v); continue; }
-    if(/sub\s*total|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item/i.test(line)) continue;
+    if(/grand\s*tot[a4]l?|total\s*bayar|total\s*tagihan|amount\s*due|\bbayar\b/i.test(line)){ meta.grand=Math.max(meta.grand||0, v); continue; }
+    if(/sub\s*tot[a4]l?|^[\W_]*items?\b|items?\s*[:.]|jumlah\s*item/i.test(line)) continue;
     if(/round|pembulatan/i.test(line)) continue;
-    if(/\btotal\b/i.test(line)){ meta.total=v; meta.grand=Math.max(meta.grand||0, v); continue; }
+    if(/grand\s*tot[a4]l?|\btot[a4]l?\b/i.test(line)){ meta.total=v; meta.grand=Math.max(meta.grand||0, v); continue; }
     if(PAYMENT_KW.test(line)) continue;
     if(/\bpb\s?[1il]\b|\bppn\b|\bpph\b|\bvat\b|pajak|\btax\b/i.test(line)){ charges.push({ id:uid(), label:lab||L.tax||"Tax", kind:"tax", mode:"amount", value:v }); continue; }
     if(/service|svc|servis|layanan|gratuit/i.test(line)){ charges.push({ id:uid(), label:lab||L.service||"Service", kind:"service", mode:"amount", value:v }); continue; }
@@ -831,7 +853,7 @@ function Bills({trip,update,cur,showToast}){
         <>
           <div className="row" style={{gap:10,flexWrap:"wrap"}}>
             <button className="btn primary" onClick={()=>addBill()}>{t("bills.addManual")}</button>
-            <ScanButton onParsed={(seed)=>addBill(seed)} showToast={showToast}/>
+            <ScanButton onParsed={(seed)=>addBill(seed)} showToast={showToast} cur={cur}/>
           </div>
           {trip.bills.length===0 ? (
             <div className="empty"><div className="big">🧾</div><p>{t("bills.empty")}</p></div>
@@ -1062,7 +1084,6 @@ function BillEditor({bill,trip,update,cur,close,remove}){
 }
 
 /* ---------- Scan / OCR ---------- */
-/* ---------- Scan / OCR ---------- */
 function loadImageEl(file){
   return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=URL.createObjectURL(file); });
 }
@@ -1099,28 +1120,32 @@ async function runOCR(image, logger){
   const { data }=await Tesseract.recognize(image,"ind+eng",{ logger });
   return data;
 }
-function ScanButton({onParsed,showToast}){
+function ScanButton({onParsed,showToast,cur}){
   const {t}=useI18n();
   const inputRef=useRef();
   const [busy,setBusy]=useState(false);
   const [prog,setProg]=useState(0);
+  const [review,setReview]=useState(null);   // raw OCR text awaiting review
+  const labels = ()=>({ tax:t("label.tax"), service:t("label.service"), discount:t("label.discount"), rounding:t("label.rounding") });
   async function handleFile(file){
     if(!file) return;
-    const L={ tax:t("label.tax"), service:t("label.service"), discount:t("label.discount"), rounding:t("label.rounding") };
-    if(typeof Tesseract==="undefined"){ showToast(t("scan.noEngine")); onParsed({ name:t("bill.new"), items:[], charges:[] }); return; }
+    if(typeof Tesseract==="undefined"){ showToast(t("scan.noEngine")); setReview(""); return; }
     setBusy(true); setProg(0);
     try{
       const prepped = await preprocessImage(file);
       const data = await runOCR(prepped, m=>{ if(m.status==="recognizing text") setProg(Math.round(m.progress*100)); });
-      const parsed = parseReceipt(data.text||"", L);
-      if(parsed.items.length===0 && parsed.charges.length===0){ showToast(t("scan.noItems")); onParsed({ name:parsed.name||t("bill.scanned"), items:[], charges:[], scannedTotal:parsed.scannedTotal }); }
-      else { showToast(t("scan.ok",{n:parsed.items.length})); onParsed({ name:parsed.name||t("bill.scanned"), items:parsed.items, charges:parsed.charges, scannedTotal:parsed.scannedTotal }); }
+      setReview(data.text||"");
     }catch(e){
       console.error(e);
       const blocked=/worker|securityerror|blob|origin/i.test(e.message||"");
       showToast(blocked?t("scan.blocked"):t("scan.failed"));
-      onParsed({ name:t("bill.new"), items:[], charges:[] });
+      setReview("");   // still open the review box so the user can paste/type
     }finally{ setBusy(false); setProg(0); }
+  }
+  function importText(text){
+    const parsed = parseReceipt(text||"", labels());
+    onParsed({ name:parsed.name||t("bill.scanned"), items:parsed.items, charges:parsed.charges, scannedTotal:parsed.scannedTotal });
+    setReview(null);
   }
   return (
     <>
@@ -1130,7 +1155,60 @@ function ScanButton({onParsed,showToast}){
         {busy ? t("bills.reading",{n:prog}) : t("bills.scan")}
       </button>
       {busy && <div className="bar" style={{flexBasis:"100%",marginTop:4}}><i style={{width:prog+"%"}}/></div>}
+      {review!==null && <ScanReview text={review} cur={cur} labels={labels()} onImport={importText}
+        onCancel={()=>setReview(null)} onRescan={()=>{ setReview(null); inputRef.current.click(); }}/>}
     </>
+  );
+}
+
+// Editable raw-OCR review with a live preview of what will be imported.
+function ScanReview({text,cur,labels,onImport,onCancel,onRescan}){
+  const {t}=useI18n();
+  const [val,setVal]=useState(text||"");
+  const preview = useMemo(()=>parseReceipt(val||"", labels), [val]);
+  const n = preview.items.length;
+  return (
+    <div className="modal-bg" onMouseDown={e=>{ if(e.target===e.currentTarget) onCancel(); }}>
+      <div className="modal">
+        <div className="between" style={{marginBottom:8}}>
+          <strong className="disp" style={{fontSize:"1.2rem"}}>{t("scan.reviewTitle")}</strong>
+          <button className="iconbtn" onClick={onCancel}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+        </div>
+        <p className="tiny muted" style={{marginTop:0}}>{t("scan.reviewHelp")}</p>
+        <textarea className="inp mono" spellCheck={false} value={val} onChange={e=>setVal(e.target.value)}
+          style={{width:"100%",minHeight:190,fontSize:".78rem",lineHeight:1.55,whiteSpace:"pre",overflowWrap:"normal",overflowX:"auto",resize:"vertical"}}/>
+        <div className="row" style={{justifyContent:"flex-end",marginTop:8}}>
+          <button className="btn sm" onClick={onRescan}>{t("scan.rescan")}</button>
+        </div>
+
+        <hr className="dashed"/>
+        <div className="between"><strong className="disp">{t("scan.preview")}</strong><span className="tiny muted">{n} {t("editor.items")}</span></div>
+        {preview.name && <div className="tiny muted" style={{marginTop:2}}>{t("scan.nameAs")}: <strong style={{color:"var(--ink)"}}>{preview.name}</strong></div>}
+        {n===0 && preview.charges.length===0 ? (
+          <p className="tiny muted" style={{marginTop:6}}>{t("scan.nothing")}</p>
+        ) : (
+          <div style={{marginTop:6,maxHeight:200,overflowY:"auto"}}>
+            {preview.items.map((it,i)=>(
+              <div key={i} className="between tiny" style={{padding:"1px 0"}}>
+                <span className="muted" style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginRight:8}}>{it.qty>1?it.qty+"× ":""}{it.name||t("editor.itemPh")}</span>
+                <span className="mono">{fmt((Number(it.qty)||1)*(Number(it.price)||0),cur)}</span>
+              </div>
+            ))}
+            {preview.charges.map((c,i)=>(
+              <div key={"c"+i} className="between tiny" style={{padding:"1px 0",opacity:.85}}>
+                <span className="muted">{c.label||t("kind."+c.kind)}</span>
+                <span className="mono">{c.kind==="discount"||(Number(c.value)||0)<0?"−":""}{fmt(Math.abs(Number(c.value)||0),cur)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="between" style={{marginTop:16}}>
+          <button className="btn" onClick={onCancel}>{t("common.cancel")}</button>
+          <button className="btn primary" onClick={()=>onImport(val)}>{n>0?t("scan.import",{n}):t("scan.importEmpty")}</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
