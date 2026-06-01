@@ -191,7 +191,7 @@ const STR = {
     "editor.paidBy":"Paid by","editor.select":"— select —","editor.method":"Split method","editor.byItem":"Item by item","editor.evenly":"Split evenly",
     "editor.partOf":"Who took part","editor.items":"Items","editor.addItem":"+ item",
     "editor.colName":"NAME","editor.colQty":"QTY","editor.colPrice":"UNIT PRICE","editor.itemPh":"Item name",
-    "editor.noItems":"No items yet — add some, or scan a receipt.","editor.sharedBy":"shared by:","editor.everyone":"everyone","editor.byQty":"Split by quantity","editor.evenSplit":"Split evenly","editor.pcsAssigned":"{a} of {b} pcs assigned",
+    "editor.noItems":"No items yet — add some, or scan a receipt.","editor.sharedBy":"shared by:","editor.everyone":"everyone","editor.byQty":"Split by quantity","editor.byShare":"Split unevenly","editor.evenSplit":"Split evenly","editor.pcsAssigned":"{a} of {b} pcs assigned","editor.shareHint":"Bigger number = bigger share",
     "editor.chargesTitle":"Tax · Service · Fees","editor.addTax":"+ tax","editor.addService":"+ service","editor.addFee":"+ fee","editor.addDiscount":"+ discount",
     "editor.chargesHelp":"Charges are spread across people in proportion to what they ordered.",
     "editor.subtotal":"Items subtotal","editor.chargesNet":"Tax · service · fees","editor.total":"Bill total",
@@ -244,7 +244,7 @@ const STR = {
     "editor.paidBy":"Dibayar oleh","editor.select":"— pilih —","editor.method":"Metode bagi","editor.byItem":"Per item","editor.evenly":"Bagi rata",
     "editor.partOf":"Siapa yang ikut","editor.items":"Item","editor.addItem":"+ item",
     "editor.colName":"NAMA","editor.colQty":"QTY","editor.colPrice":"HARGA SATUAN","editor.itemPh":"Nama item",
-    "editor.noItems":"Belum ada item — tambahkan, atau pindai struk.","editor.sharedBy":"dibagi oleh:","editor.everyone":"semua","editor.byQty":"Bagi per jumlah","editor.evenSplit":"Bagi rata","editor.pcsAssigned":"{a} dari {b} pcs dialokasikan",
+    "editor.noItems":"Belum ada item — tambahkan, atau pindai struk.","editor.sharedBy":"dibagi oleh:","editor.everyone":"semua","editor.byQty":"Bagi per jumlah","editor.byShare":"Bagi tak rata","editor.evenSplit":"Bagi rata","editor.pcsAssigned":"{a} dari {b} pcs dialokasikan","editor.shareHint":"Angka lebih besar = bagian lebih besar",
     "editor.chargesTitle":"Pajak · Layanan · Biaya","editor.addTax":"+ pajak","editor.addService":"+ layanan","editor.addFee":"+ biaya","editor.addDiscount":"+ diskon",
     "editor.chargesHelp":"Biaya dibagi ke setiap orang sesuai porsi pesanannya.",
     "editor.subtotal":"Subtotal item","editor.chargesNet":"Pajak · layanan · biaya","editor.total":"Total tagihan",
@@ -578,7 +578,7 @@ function personBreakdown(trip){
         const fr=itemSplit(it,a); const portions=it.portions||null;
         a.forEach(id=>{ const amt=line*fr[id]; sub[id]+=amt;
           const pcs = portions ? (Number(portions[id])||0) : (Number(it.qty)||1);
-          linesBy[id].push({ name:it.name||"", qty:pcs, amount:amt, shared:a.length>1 }); }); });
+          linesBy[id].push({ name:it.name||"", qty:pcs, amount:amt, shared:a.length>1, portioned:!!portions }); }); });
     }
     const chg={}; ids.forEach(id=>chg[id]={tax:0,service:0,other:0,discount:0});
     (bill.charges||[]).forEach(c=>{
@@ -937,8 +937,9 @@ function BillEditor({bill,trip,update,cur,close,remove}){
     if(x.id!==itemId) return x;
     if(x.portions){ const y={...x}; delete y.portions; return y; }                 // turn off → equal split
     const a=(x.assignedTo||[]), n=a.length||1, q=Math.max(0,Math.round(Number(x.qty)||0));
-    const base=Math.floor(q/n), rem=q%n, portions={};
-    a.forEach((id,i)=>portions[id]=base+(i<rem?1:0));                                // seed an even whole split
+    const portions={};
+    if(q>=n && q>0){ const base=Math.floor(q/n), rem=q%n; a.forEach((id,i)=>portions[id]=base+(i<rem?1:0)); } // multi-piece → split the pieces
+    else { a.forEach(id=>portions[id]=1); }                                          // single big item → equal shares to start
     return {...x, portions};
   })); }
   function setPortion(itemId,pid,val){ const v=Math.max(0,Number(val)||0); setBill(b=>b.items=b.items.map(x=>{
@@ -1032,12 +1033,13 @@ function BillEditor({bill,trip,update,cur,close,remove}){
               const a=(it.assignedTo||[]).filter(id=>trip.people.some(p=>p.id===id));
               const line=(Number(it.qty)||1)*(Number(it.price)||0);
               const fr=itemSplit(it,a);
-              const assigned=a.reduce((s,id)=>s+(it.portions?(Number(it.portions[id])||0):0),0);
               const itemQty=Math.round(Number(it.qty)||0);
+              const pieceMode=itemQty>1;                               // many pieces → split pieces; single item → relative shares
+              const assigned=a.reduce((s,id)=>s+(it.portions?(Number(it.portions[id])||0):0),0);
               return (
                 <div className="qty-split">
                   <button className="qty-toggle" onClick={()=>togglePortions(it.id)}>
-                    {it.portions ? "↩ "+t("editor.evenSplit") : "⚖ "+t("editor.byQty")}
+                    {it.portions ? "↩ "+t("editor.evenSplit") : "⚖ "+(pieceMode?t("editor.byQty"):t("editor.byShare"))}
                   </button>
                   {it.portions && (
                     <div className="portions">
@@ -1051,9 +1053,13 @@ function BillEditor({bill,trip,update,cur,close,remove}){
                             <span className="tiny muted mono" style={{width:84,textAlign:"right",flexShrink:0}}>{fmt(round2(line*(fr[id]||0)),cur)}</span>
                           </div>
                         ); })}
-                      <div className="tiny" style={{textAlign:"right",marginTop:2,color: assigned===itemQty?"var(--ink-soft)":"var(--owe)"}}>
-                        {t("editor.pcsAssigned",{a:+assigned.toFixed(2), b:itemQty})}
-                      </div>
+                      {pieceMode ? (
+                        <div className="tiny" style={{textAlign:"right",marginTop:2,color: assigned===itemQty?"var(--ink-soft)":"var(--owe)"}}>
+                          {t("editor.pcsAssigned",{a:+assigned.toFixed(2), b:itemQty})}
+                        </div>
+                      ) : (
+                        <div className="tiny muted" style={{textAlign:"right",marginTop:2}}>{t("editor.shareHint")}</div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1321,7 +1327,7 @@ function Settle({trip,update,cur,balances,showToast}){
                       <div style={{paddingLeft: multi?4:0}}>
                         {(bl.lines||[]).map((l,k)=>(
                           <div key={k} className="between" style={{padding:"1px 0",fontSize:".74rem",color:"var(--ink-soft)",gap:8}}>
-                            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {l.qty>1?l.qty+"× ":""}{l.name||t("editor.itemPh")}{l.shared?" ("+t("settle.shared")+")":""}</span>
+                            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>· {((l.portioned||l.qty>1)&&l.qty>0)?(+Number(l.qty).toFixed(2))+"× ":""}{l.name||t("editor.itemPh")}{l.shared?" ("+t("settle.shared")+")":""}</span>
                             <span className="mono" style={{flexShrink:0}}>{fmt(l.amount,cur)}</span>
                           </div>
                         ))}
