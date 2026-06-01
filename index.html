@@ -421,6 +421,7 @@ function detectMerchant(lines){
 
 function parseReceipt(text, L){
   L = L || {};
+  text = (text||"").replace(/@/g," ");   // "@" just marks per-piece price — ignore it
   const lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
   const charges=[];
   const meta={ total:null, grand:null };
@@ -853,7 +854,7 @@ function Bills({trip,update,cur,showToast}){
         <>
           <div className="row" style={{gap:10,flexWrap:"wrap"}}>
             <button className="btn primary" onClick={()=>addBill()}>{t("bills.addManual")}</button>
-            <ScanButton onParsed={(seed)=>addBill(seed)} showToast={showToast} cur={cur}/>
+            <ScanButton onParsed={(seed)=>addBill(seed)} showToast={showToast}/>
           </div>
           {trip.bills.length===0 ? (
             <div className="empty"><div className="big">🧾</div><p>{t("bills.empty")}</p></div>
@@ -1120,32 +1121,28 @@ async function runOCR(image, logger){
   const { data }=await Tesseract.recognize(image,"ind+eng",{ logger });
   return data;
 }
-function ScanButton({onParsed,showToast,cur}){
+function ScanButton({onParsed,showToast}){
   const {t}=useI18n();
   const inputRef=useRef();
   const [busy,setBusy]=useState(false);
   const [prog,setProg]=useState(0);
-  const [review,setReview]=useState(null);   // raw OCR text awaiting review
-  const labels = ()=>({ tax:t("label.tax"), service:t("label.service"), discount:t("label.discount"), rounding:t("label.rounding") });
   async function handleFile(file){
     if(!file) return;
-    if(typeof Tesseract==="undefined"){ showToast(t("scan.noEngine")); setReview(""); return; }
+    const L={ tax:t("label.tax"), service:t("label.service"), discount:t("label.discount"), rounding:t("label.rounding") };
+    if(typeof Tesseract==="undefined"){ showToast(t("scan.noEngine")); onParsed({ name:t("bill.new"), items:[], charges:[] }); return; }
     setBusy(true); setProg(0);
     try{
       const prepped = await preprocessImage(file);
       const data = await runOCR(prepped, m=>{ if(m.status==="recognizing text") setProg(Math.round(m.progress*100)); });
-      setReview(data.text||"");
+      const parsed = parseReceipt(data.text||"", L);
+      if(parsed.items.length===0 && parsed.charges.length===0){ showToast(t("scan.noItems")); onParsed({ name:parsed.name||t("bill.scanned"), items:[], charges:[], scannedTotal:parsed.scannedTotal }); }
+      else { showToast(t("scan.ok",{n:parsed.items.length})); onParsed({ name:parsed.name||t("bill.scanned"), items:parsed.items, charges:parsed.charges, scannedTotal:parsed.scannedTotal }); }
     }catch(e){
       console.error(e);
       const blocked=/worker|securityerror|blob|origin/i.test(e.message||"");
       showToast(blocked?t("scan.blocked"):t("scan.failed"));
-      setReview("");   // still open the review box so the user can paste/type
+      onParsed({ name:t("bill.new"), items:[], charges:[] });
     }finally{ setBusy(false); setProg(0); }
-  }
-  function importText(text){
-    const parsed = parseReceipt(text||"", labels());
-    onParsed({ name:parsed.name||t("bill.scanned"), items:parsed.items, charges:parsed.charges, scannedTotal:parsed.scannedTotal });
-    setReview(null);
   }
   return (
     <>
@@ -1155,60 +1152,7 @@ function ScanButton({onParsed,showToast,cur}){
         {busy ? t("bills.reading",{n:prog}) : t("bills.scan")}
       </button>
       {busy && <div className="bar" style={{flexBasis:"100%",marginTop:4}}><i style={{width:prog+"%"}}/></div>}
-      {review!==null && <ScanReview text={review} cur={cur} labels={labels()} onImport={importText}
-        onCancel={()=>setReview(null)} onRescan={()=>{ setReview(null); inputRef.current.click(); }}/>}
     </>
-  );
-}
-
-// Editable raw-OCR review with a live preview of what will be imported.
-function ScanReview({text,cur,labels,onImport,onCancel,onRescan}){
-  const {t}=useI18n();
-  const [val,setVal]=useState(text||"");
-  const preview = useMemo(()=>parseReceipt(val||"", labels), [val]);
-  const n = preview.items.length;
-  return (
-    <div className="modal-bg" onMouseDown={e=>{ if(e.target===e.currentTarget) onCancel(); }}>
-      <div className="modal">
-        <div className="between" style={{marginBottom:8}}>
-          <strong className="disp" style={{fontSize:"1.2rem"}}>{t("scan.reviewTitle")}</strong>
-          <button className="iconbtn" onClick={onCancel}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
-        </div>
-        <p className="tiny muted" style={{marginTop:0}}>{t("scan.reviewHelp")}</p>
-        <textarea className="inp mono" spellCheck={false} value={val} onChange={e=>setVal(e.target.value)}
-          style={{width:"100%",minHeight:190,fontSize:".78rem",lineHeight:1.55,whiteSpace:"pre",overflowWrap:"normal",overflowX:"auto",resize:"vertical"}}/>
-        <div className="row" style={{justifyContent:"flex-end",marginTop:8}}>
-          <button className="btn sm" onClick={onRescan}>{t("scan.rescan")}</button>
-        </div>
-
-        <hr className="dashed"/>
-        <div className="between"><strong className="disp">{t("scan.preview")}</strong><span className="tiny muted">{n} {t("editor.items")}</span></div>
-        {preview.name && <div className="tiny muted" style={{marginTop:2}}>{t("scan.nameAs")}: <strong style={{color:"var(--ink)"}}>{preview.name}</strong></div>}
-        {n===0 && preview.charges.length===0 ? (
-          <p className="tiny muted" style={{marginTop:6}}>{t("scan.nothing")}</p>
-        ) : (
-          <div style={{marginTop:6,maxHeight:200,overflowY:"auto"}}>
-            {preview.items.map((it,i)=>(
-              <div key={i} className="between tiny" style={{padding:"1px 0"}}>
-                <span className="muted" style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",marginRight:8}}>{it.qty>1?it.qty+"× ":""}{it.name||t("editor.itemPh")}</span>
-                <span className="mono">{fmt((Number(it.qty)||1)*(Number(it.price)||0),cur)}</span>
-              </div>
-            ))}
-            {preview.charges.map((c,i)=>(
-              <div key={"c"+i} className="between tiny" style={{padding:"1px 0",opacity:.85}}>
-                <span className="muted">{c.label||t("kind."+c.kind)}</span>
-                <span className="mono">{c.kind==="discount"||(Number(c.value)||0)<0?"−":""}{fmt(Math.abs(Number(c.value)||0),cur)}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="between" style={{marginTop:16}}>
-          <button className="btn" onClick={onCancel}>{t("common.cancel")}</button>
-          <button className="btn primary" onClick={()=>onImport(val)}>{n>0?t("scan.import",{n}):t("scan.importEmpty")}</button>
-        </div>
-      </div>
-    </div>
   );
 }
 
