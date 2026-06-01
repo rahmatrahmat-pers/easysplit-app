@@ -113,7 +113,9 @@
   .pill.fee{background:var(--paper-3);}
 
   .item-line{display:grid;grid-template-columns:1fr 60px 112px 36px;gap:8px;align-items:center;}
-  @media(max-width:620px){.item-line{grid-template-columns:1fr 48px 92px 32px;}}
+  .item-line>*{min-width:0;}
+  .item-line input{width:100%;}
+  @media(max-width:620px){.item-line{grid-template-columns:1fr 44px 84px 30px;gap:6px;}}
   .item-card{border:2px solid var(--ink);border-radius:11px;padding:9px 10px;margin-bottom:10px;background:var(--paper);box-shadow:2px 2px 0 rgba(27,24,19,.55);}
   .item-card .assign-row{margin-top:8px;padding-top:8px;border-top:1.5px dashed rgba(27,24,19,.28);}
   .item-head{display:grid;grid-template-columns:1fr 60px 112px 36px;gap:8px;align-items:center;font-weight:700;}
@@ -128,6 +130,7 @@
 
   .modal-bg{position:fixed;inset:0;background:rgba(27,24,19,.45);z-index:200;display:grid;place-items:start center;padding:30px 14px;overflow:auto;}
   .modal{width:100%;max-width:640px;background:var(--paper-2);border:2.5px solid var(--ink);border-radius:14px;box-shadow:var(--shadow);padding:22px;}
+  @media(max-width:620px){.modal{padding:16px 13px;} .modal-bg{padding:18px 8px;}}
 
   .balance-bar{height:14px;border-radius:20px;border:2px solid var(--ink);overflow:hidden;background:var(--paper-3);}
   .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:11px 18px;border-radius:30px;font-weight:600;z-index:500;box-shadow:var(--shadow-sm);animation:pop .25s ease;max-width:90vw;text-align:center;}
@@ -1048,9 +1051,9 @@ function BillEditor({bill,trip,update,cur,close,remove}){
                           <div key={id} className="portion-row">
                             <span className="avatar" style={{background:colorFor(trip.people,p.id),width:22,height:22,fontSize:".64rem"}}>{initials(p.name)}</span>
                             <span className="tiny" style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</span>
-                            <input className="inp mono" type="number" min="0" step="any" style={{width:56,padding:"4px 6px",textAlign:"center"}}
+                            <input className="inp mono" type="number" min="0" step="any" inputMode="decimal" style={{width:70,flexShrink:0,padding:"4px 8px",textAlign:"center"}}
                               value={it.portions[id]??0} onChange={e=>setPortion(it.id,id,e.target.value)}/>
-                            <span className="tiny muted mono" style={{width:84,textAlign:"right",flexShrink:0}}>{fmt(round2(line*(fr[id]||0)),cur)}</span>
+                            <span className="tiny muted mono" style={{width:88,textAlign:"right",flexShrink:0}}>{fmt(round2(line*(fr[id]||0)),cur)}</span>
                           </div>
                         ); })}
                       {pieceMode ? (
